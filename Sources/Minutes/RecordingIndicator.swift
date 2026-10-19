@@ -26,7 +26,9 @@ final class RecordingIndicator {
     /// The panel's current size, nil before it is first shown.
     var panelSize: NSSize? { panel?.frame.size }
     /// The size the pill's content asks for right now.
-    var contentFittingSize: NSSize? { hostingView?.fittingSize }
+    var contentFittingSize: NSSize? { hostingView == nil ? nil : measuredContentSize() }
+    /// Whether the content may resize the panel by itself (it must not: only `place` sizes it).
+    var contentResizesPanel: Bool { !(hostingView?.sizingOptions.isEmpty ?? true) }
 
     func showRecording(appName: String, since: Date) {
         show(.recording(appName: appName, since: since, stopDeadline: nil), hideAfter: nil)
@@ -111,11 +113,17 @@ final class RecordingIndicator {
                 close: { [weak self] in self?.hide() }))
     }
 
+    /// The content's ideal size, measured apart: the panel's hosting view does not report a size,
+    /// because it must never resize the panel by itself.
+    private func measuredContentSize() -> NSSize {
+        NSHostingController(rootView: makeRootView())
+            .sizeThatFits(in: NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
+    }
+
     /// Top centre of the screen in use, just below the menu bar (and the notch).
     private func place(_ panel: NSPanel) {
-        guard let content = panel.contentView, let screen = screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
-        content.layoutSubtreeIfNeeded()
-        let size = content.fittingSize
+        guard let screen = screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
+        let size = measuredContentSize()
         let visible = screen.visibleFrame
         panel.setFrame(
             NSRect(x: visible.midX - size.width / 2, y: visible.maxY - size.height - 10, width: size.width, height: size.height),
