@@ -79,6 +79,15 @@ public struct MeetingDetector: Sendable {
         releasedSince = nil
     }
 
+    /// User started recording `app` by hand: treat it as the active meeting so it stops, like an
+    /// automatic one, once the app releases the microphone. Lifts any earlier suppression.
+    public mutating func adopt(_ app: MeetingApp) {
+        isSuppressed = false
+        activeMeeting = app
+        pendingStart = nil
+        releasedSince = nil
+    }
+
     private mutating func checkStart(of candidate: MeetingApp?, now: Date) -> Event? {
         guard let candidate else {
             pendingStart = nil

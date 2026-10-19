@@ -73,22 +73,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showStatusWindow(on: nil)
     }
 
+    /// Centers the window on `screen`, or else on the screen under the pointer, every time it is
+    /// shown: with several displays the user is looking at the one they just clicked on.
     private func showStatusWindow(on screen: NSScreen?) {
-        if statusWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: StatusView(coordinator: coordinator)))
-            window.title = "Minutes"
-            window.styleMask = [.titled, .closable, .miniaturizable]
-            window.isReleasedWhenClosed = false
-            window.center()
-            if let screen {
-                let visible = screen.visibleFrame
-                window.setFrameOrigin(NSPoint(
-                    x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2))
-            }
-            statusWindow = window
+        let window = statusWindow ?? makeStatusWindow()
+        statusWindow = window
+        if !window.isVisible, let target = screen ?? Self.screenUnderPointer() {
+            let visible = target.visibleFrame
+            window.setFrameOrigin(NSPoint(
+                x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2))
         }
         NSApp.activate()
-        statusWindow?.makeKeyAndOrderFront(nil)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func makeStatusWindow() -> NSWindow {
+        let window = NSWindow(contentViewController: NSHostingController(rootView: StatusView(coordinator: coordinator)))
+        window.title = "Minutes"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.isReleasedWhenClosed = false
+        return window
+    }
+
+    private static func screenUnderPointer() -> NSScreen? {
+        let pointer = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) } ?? NSScreen.main
     }
 
     /// Login launches stay silent in the menu bar. Login items registered through SMAppService

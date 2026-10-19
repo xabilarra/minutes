@@ -54,6 +54,9 @@ final class RecordingCoordinator: ObservableObject {
     private let logger = Logger(subsystem: "io.github.xabilarra.Minutes", category: "coordinator")
     private var detector = MeetingDetector()
     private var session: RecordingSession?
+    /// Whether the session ends when its app releases the microphone: automatic recordings, and
+    /// manual ones of a meeting app that was using the microphone when they started.
+    private var sessionStopsWithMic = false
     private var browserMeetingVisible = false
     private var lastBrowserCheck = Date.distantPast
     private var tasks: [Task<Void, Never>] = []
@@ -114,7 +117,7 @@ final class RecordingCoordinator: ObservableObject {
 
         let event = detector.update(
             activeInputBundleIDs: activeInputs, browserMeetingVisible: browserMeetingVisible, now: Date())
-        if session?.trigger == .auto {
+        if session != nil, sessionStopsWithMic {
             indicator.updateStopCountdown(detector.pendingStopDeadline)
         }
         switch event {
@@ -122,7 +125,7 @@ final class RecordingCoordinator: ObservableObject {
             guard AppSettings().autoRecord, session == nil else { return }
             await startRecording(app: app, trigger: .auto)
         case .stopped:
-            guard session?.trigger == .auto else { return }
+            guard session != nil, sessionStopsWithMic else { return }
             await stopRecording(manual: false)
         case nil:
             break
@@ -144,19 +147,28 @@ final class RecordingCoordinator: ObservableObject {
     // MARK: Recording
 
     /// Starts recording the meeting app using the mic, or else the frontmost app (for webinars, ad-hoc calls).
+    /// A meeting app using the mic stops by itself when it hangs up; the frontmost-app fallback never does.
     func startManualRecording() {
         Task {
             let monitor = micMonitor
             let activeInputs = await Task.detached(priority: .userInitiated) { monitor.activeInputBundleIDs() }.value
-            let app = MeetingAppCatalog.candidates(in: activeInputs).first
-                ?? frontmostApp()
-                ?? MeetingApp(bundleID: "", displayName: "Manual", isBrowser: false)
+            if let meetingApp = MeetingAppCatalog.candidates(in: activeInputs).first {
+                // Only a recording this call started is adopted, never one already running.
+                if await startRecording(app: meetingApp, trigger: .manual) {
+                    detector.adopt(meetingApp)
+                    sessionStopsWithMic = true
+                }
+                return
+            }
+            let app = frontmostApp() ?? MeetingApp(bundleID: "", displayName: "Manual", isBrowser: false)
             await startRecording(app: app, trigger: .manual)
         }
     }
 
-    func startRecording(app: MeetingApp, trigger: RecordingSession.Trigger) async {
-        guard session == nil, !isStarting else { return }
+    /// Returns whether this call started a recording (false when one is already running or starting, or on failure).
+    @discardableResult
+    func startRecording(app: MeetingApp, trigger: RecordingSession.Trigger) async -> Bool {
+        guard session == nil, !isStarting else { return false }
         isStarting = true
         defer { isStarting = false }
 
@@ -176,15 +188,18 @@ final class RecordingCoordinator: ObservableObject {
                 app: app, window: window, video: videoSource, trigger: trigger,
                 root: settings.meetingsRoot)
             session = newSession
+            sessionStopsWithMic = trigger == .auto
             activeRecording = ActiveRecording(
                 appName: app.displayName, startedAt: newSession.startedAt, trigger: trigger,
                 hasVideo: newSession.metadata.hasVideo)
             lastProblem = newSession.warnings.isEmpty ? nil : newSession.warnings.joined(separator: " ")
             indicator.showRecording(appName: app.displayName, since: newSession.startedAt)
+            return true
         } catch {
             let message = error.localizedDescription
             lastProblem = String(localized: "No se pudo iniciar la grabación: \(message)")
             notifier.problem(String(localized: "No se pudo iniciar la grabación"), detail: message)
+            return false
         }
     }
 
@@ -432,6 +447,24 @@ final class RecordingCoordinator: ObservableObject {
             lastProblem = String(localized: "Abrir al iniciar sesión: \(error.localizedDescription)")
         }
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    /// Quits (finishing any recording first) and opens Minutes again once this process has exited:
+    /// macOS applies a new Screen Recording grant only to a freshly launched app.
+    func relaunch() {
+        let reopen = Process()
+        reopen.executableURL = URL(filePath: "/bin/sh")
+        reopen.arguments = [
+            "-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$2\"", "relaunch",
+            String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundleURL.path,
+        ]
+        do {
+            try reopen.run()
+        } catch {
+            lastProblem = String(localized: "No se pudo reiniciar Minutes: \(error.localizedDescription)")
+            return
+        }
+        NSApp.terminate(nil)
     }
 
     func openMeetingsFolder() {

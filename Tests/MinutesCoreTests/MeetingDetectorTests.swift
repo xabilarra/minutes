@@ -110,6 +110,28 @@ import MinutesCore
         #expect(tick(&detector, ["com.microsoft.teams2"], at: 59) == .started(teams))
     }
 
+    /// A recording started by hand for a meeting app (no meeting window seen, e.g. without Screen
+    /// Recording permission) must still end when the app hangs up, instead of recording for hours.
+    @Test func adoptedManualMeetingStopsOnceItsAppReleasedTheMic() {
+        var detector = MeetingDetector()
+        detector.adopt(chrome)
+        #expect(detector.activeMeeting == chrome)
+        #expect(tick(&detector, ["com.google.Chrome"], at: 0) == nil)
+        #expect(tick(&detector, [], at: 10) == nil)
+        #expect(detector.pendingStopDeadline == at(55))
+        #expect(tick(&detector, [], at: 54.9) == nil)
+        #expect(tick(&detector, [], at: 55) == .stopped(chrome))
+        #expect(detector.activeMeeting == nil)
+    }
+
+    @Test func adoptingLiftsASuppressionLeftByAnEarlierManualStop() {
+        var detector = detectorRecordingZoom()
+        detector.suppressUntilMicReleased()
+        detector.adopt(zoom)
+        #expect(tick(&detector, [], at: 10) == nil)
+        #expect(tick(&detector, [], at: 55) == .stopped(zoom))
+    }
+
     @Test func manualStopSuppressesAutoStartUntilTheMicIsReleased() {
         var detector = detectorRecordingZoom()
         detector.suppressUntilMicReleased()

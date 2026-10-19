@@ -61,7 +61,10 @@ struct StatusView: View {
                         title: "Grabación de pantalla y audio del sistema", state: coordinator.permissions.screenRecording,
                         detail: "Vídeo de la ventana de la reunión y detección de reuniones en el navegador. Vuelve a abrir Minutes después de activarlo."
                     ) {
-                        Button("Abrir Ajustes…") { coordinator.openPrivacySettings(.screenRecording) }
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Button("Abrir Ajustes…") { coordinator.openPrivacySettings(.screenRecording) }
+                            Button("Reiniciar Minutes") { coordinator.relaunch() }
+                        }
                     }
                     SetupRow(
                         title: "Audio del sistema", state: nil,

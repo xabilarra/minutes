@@ -94,3 +94,5 @@
 "¿Has colgado?" = "Did you hang up?";
 "Última reunión" = "Last meeting";
 "Última reunión: %@" = "Last meeting: %@";
+"Reiniciar Minutes" = "Restart Minutes";
+"No se pudo reiniciar Minutes: %@" = "Could not restart Minutes: %@";
