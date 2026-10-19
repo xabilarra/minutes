@@ -12,6 +12,8 @@ final class RecordingIndicator {
     var onCopyTranscript: ((URL) -> Bool)?
     var onCopyPath: ((URL) -> Bool)?
     var onRetry: ((URL) -> Void)?
+    /// Screen to show the pill on; nil follows the screen in use.
+    var screen: NSScreen?
 
     /// How long the finished or failed state stays before hiding by itself.
     private static let resultDuration: Double = 120
@@ -103,7 +105,7 @@ final class RecordingIndicator {
 
     /// Top centre of the screen in use, just below the menu bar (and the notch).
     private func place(_ panel: NSPanel) {
-        guard let content = panel.contentView, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let content = panel.contentView, let screen = screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
         content.layoutSubtreeIfNeeded()
         let size = content.fittingSize
         let visible = screen.visibleFrame
@@ -167,9 +169,7 @@ private struct IndicatorView: View {
                     .font(.callout.monospacedDigit())
             }
             Button("Detener ya", action: actions.stop)
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle(tint: .red))
         case .recording(let appName, let since, nil):
             Circle()
                 .fill(.red)
@@ -183,36 +183,33 @@ private struct IndicatorView: View {
                 Text(Self.elapsed(from: since, to: context.date)).font(.callout.monospacedDigit())
             }
             Button("Detener", action: actions.stop)
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle(tint: .red))
         case .transcribing(let folder):
             ProgressView().controlSize(.small)
             Text("Guardando y transcribiendo…").font(.callout)
             Button("Abrir carpeta") { actions.openFolder(folder) }
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle())
         case .ready(let folder):
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             Text("Transcripción lista").font(.callout.weight(.semibold))
             Button(copied == .transcript ? "Copiada ✓" : "Copiar texto") {
                 if actions.copyTranscript(folder) { copied = .transcript }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(PillButtonStyle(tint: PillButtonStyle.brand))
             Button(copied == .path ? "Ruta copiada ✓" : "Copiar ruta") {
                 if actions.copyPath(folder) { copied = .path }
             }
-            .controlSize(.small)
+            .buttonStyle(PillButtonStyle())
             Button("Abrir carpeta") { actions.openFolder(folder) }
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle())
             closeButton
         case .failed(let folder):
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text("Falló la transcripción").font(.callout.weight(.semibold))
             Button("Reintentar") { actions.retry(folder) }
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle())
             Button("Abrir carpeta") { actions.openFolder(folder) }
-                .controlSize(.small)
+                .buttonStyle(PillButtonStyle())
             closeButton
         case .hidden:
             EmptyView()
@@ -239,5 +236,25 @@ private struct IndicatorView: View {
         return hours > 0
             ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
             : String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+/// Buttons with their own colours: the panel never becomes key, so system button styles would
+/// always draw in their inactive grey.
+private struct PillButtonStyle: ButtonStyle {
+    static let brand = Color(red: 0.42, green: 0.25, blue: 0.75)
+
+    /// nil draws a neutral button.
+    var tint: Color?
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(tint == nil ? .regular : .semibold))
+            .foregroundStyle(tint == nil ? Color.primary : Color.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(tint ?? Color.primary.opacity(0.08)))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
     }
 }

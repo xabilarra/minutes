@@ -90,6 +90,7 @@ struct StatusView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 300, alignment: .trailing)
                     .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(20)
@@ -104,7 +105,11 @@ struct StatusView: View {
                 case .transcribing:
                     Label("Guardando y transcribiendo…", systemImage: "ellipsis.circle")
                 case .ready:
-                    Label("Transcripción lista", systemImage: "checkmark.circle.fill")
+                    Label {
+                        Text("Transcripción lista")
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
                 case .failed:
                     Label("Falló la transcripción", systemImage: "exclamationmark.triangle.fill")
                 }

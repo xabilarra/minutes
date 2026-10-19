@@ -258,6 +258,29 @@ final class RecordingCoordinator: ObservableObject {
         }
     }
 
+    // MARK: Showcase
+
+    /// Fills the published state with sample data for README screenshots. Nothing is recorded.
+    func showcase(_ scene: ShowcaseScene, on screen: NSScreen?) {
+        permissions = Permissions(microphone: true, screenRecording: true)
+        hasGroqKey = true
+        indicator.screen = screen
+        let since = Date().addingTimeInterval(-754)
+        let folder = FileManager.default.temporaryDirectory.appending(path: ShowcaseScene.meetingName)
+        switch scene {
+        case .recording, .ending:
+            activeRecording = ActiveRecording(
+                appName: ShowcaseScene.appName, startedAt: since, trigger: .auto, hasVideo: true)
+            indicator.showRecording(appName: ShowcaseScene.appName, since: since)
+            if scene == .ending {
+                indicator.updateStopCountdown(Date().addingTimeInterval(32))
+            }
+        case .ready:
+            lastMeeting = LastMeeting(folder: folder, state: .ready)
+            indicator.showTranscriptReady(folder: folder)
+        }
+    }
+
     // MARK: Last meeting
 
     /// Copies the whole transcript (Markdown) so it can be pasted straight into an agent.

@@ -37,6 +37,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let scene = ShowcaseScene(arguments: CommandLine.arguments) {
+            // Screenshots look best on the sharpest screen.
+            let screen = NSScreen.screens.max { $0.backingScaleFactor < $1.backingScaleFactor }
+            AppSettings.registerDefaults()
+            coordinator.showcase(scene, on: screen)
+            showStatusWindow(on: screen)
+            return
+        }
         let smokeTest = SmokeTest(arguments: CommandLine.arguments)
         coordinator.start(autoDetect: smokeTest == nil)
         smokeTest?.run(with: coordinator)
@@ -62,12 +70,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showStatusWindow() {
+        showStatusWindow(on: nil)
+    }
+
+    private func showStatusWindow(on screen: NSScreen?) {
         if statusWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: StatusView(coordinator: coordinator)))
             window.title = "Minutes"
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.center()
+            if let screen {
+                let visible = screen.visibleFrame
+                window.setFrameOrigin(NSPoint(
+                    x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2))
+            }
             statusWindow = window
         }
         NSApp.activate()
