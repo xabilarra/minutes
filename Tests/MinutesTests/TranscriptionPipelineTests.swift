@@ -365,3 +365,23 @@ private actor RecordingGroqTransport: HTTPTransport {
         return (try? AudioFileTools.duration(of: url)) ?? -1
     }
 }
+
+@Suite struct ChunkCacheTests {
+    /// A cached chunk is reused only for exactly the same pieces: after an update that changes how
+    /// speech is detected, a retry must not take the text of a different chunk.
+    @Test func reusesAChunkOnlyForTheSamePieces() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appending(path: "MinutesCacheTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cache = ChunkCache(folder: folder, language: "es")
+        let cached = SpeechChunk(index: 0, pieces: [AudioPiece(start: 10, duration: 5), AudioPiece(start: 60, duration: 5)])
+        let segments = [TranscriptSegment(speaker: .me, start: 10, end: 12, text: "hola")]
+        cache.store(segments, speaker: .me, chunk: cached)
+
+        #expect(cache.segments(speaker: .me, chunk: cached) == segments)
+        // Same index, first start, total and count; the second piece starts elsewhere.
+        let moved = SpeechChunk(index: 0, pieces: [AudioPiece(start: 10, duration: 5), AudioPiece(start: 90, duration: 5)])
+        #expect(cache.segments(speaker: .me, chunk: moved) == nil)
+        #expect(cache.segments(speaker: .them, chunk: cached) == nil)
+    }
+}

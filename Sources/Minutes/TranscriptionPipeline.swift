@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import MinutesCapture
 import MinutesCore
@@ -296,10 +297,12 @@ struct ChunkCache: Sendable {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// Language and the chunk's pieces are part of the name, so another language or chunk plan never reuses a stale chunk.
+    /// Language and a fingerprint of every piece (to the millisecond) are part of the name, so another
+    /// language or chunk plan never reuses a stale chunk.
     private func url(_ speaker: Speaker, _ chunk: SpeechChunk) -> URL {
-        let start = Int(chunk.pieces.first?.start ?? 0), duration = Int(chunk.duration * 10)
-        return directory.appending(
-            path: "\(language)-\(speaker.rawValue)-\(chunk.index)-speech-\(start)-\(duration)-\(chunk.pieces.count).json")
+        let layout = chunk.pieces.map { "\(Int(($0.start * 1000).rounded())):\(Int(($0.duration * 1000).rounded()))" }
+        let digest = SHA256.hash(data: Data(layout.joined(separator: ",").utf8))
+        let fingerprint = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+        return directory.appending(path: "\(language)-\(speaker.rawValue)-\(chunk.index)-\(fingerprint).json")
     }
 }
