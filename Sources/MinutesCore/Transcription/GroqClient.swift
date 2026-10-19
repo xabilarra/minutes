@@ -47,7 +47,10 @@ public struct GroqClient: Sendable {
 
     static let maximumErrorMessageLength = 500
     static let defaultRetryAfter: Double = 5
-    static let maximumRetryAfter: Double = 60
+    /// Groq's hourly audio limit can ask for waits of several minutes.
+    static let maximumRetryAfter: Double = 900
+    /// Rate-limit waits allowed per file, on top of `maxAttempts` (a long meeting can hit the hourly limit often).
+    static let maximumRateLimitWaits = 20
     static let initialBackoff: Double = 2
     static let maximumBackoff: Double = 60
     /// Idle timeout per request: uploads of a 10-minute chunk plus server processing stay well within it.
@@ -78,7 +81,7 @@ public struct GroqClient: Sendable {
     }
 
     /// POST multipart/form-data: file (filename = last path component, content type audio/mp4 for .m4a), model, language (if non-nil), prompt (if non-nil), response_format=verbose_json, temperature=0, timestamp_granularities[]=segment. Authorization: Bearer <key>.
-    /// Retries: 429 → wait Retry-After seconds (header, default 5, max 60); 5xx and URLError → backoff 2, 4, 8 s; up to maxAttempts total attempts. Other 4xx → throw .http immediately (message from JSON {"error":{"message":...}} if present, else body text).
+    /// Retries: 429 → wait the longer of the Retry-After header and the "try again in 1m12s" of the message (default 5, max 900), up to 20 waits that do not count as attempts; 5xx and URLError → backoff 2, 4, 8 s; up to maxAttempts total attempts. Other 4xx → throw .http immediately (message from JSON {"error":{"message":...}} if present, else body text).
     ///
     /// Empty or whitespace API key → throws `.missingAPIKey` before any request. When attempts run out,
     /// the last HTTP failure is thrown as `.http` and the last network failure as its `URLError`.
@@ -104,6 +107,7 @@ public struct GroqClient: Sendable {
         )
         let attempts = max(1, maxAttempts)
         var attempt = 0
+        var rateLimitWaits = 0
         while true {
             attempt += 1
             try Task.checkCancellation()
@@ -121,8 +125,10 @@ public struct GroqClient: Sendable {
             switch response.statusCode {
             case 200..<300:
                 return try Self.parseSegments(data)
-            case 429 where !isLastAttempt:
-                try await sleeper(Self.retryAfterDelay(response))
+            case 429 where rateLimitWaits < Self.maximumRateLimitWaits:
+                rateLimitWaits += 1
+                attempt -= 1
+                try await sleeper(Self.retryAfterDelay(response, body: data))
             case 500...599 where !isLastAttempt:
                 try await sleeper(Self.backoffDelay(afterAttempt: attempt))
             default:
@@ -189,14 +195,31 @@ public struct GroqClient: Sendable {
         min(initialBackoff * pow(2, Double(max(0, attempt - 1))), maximumBackoff)
     }
 
-    /// Seconds from the Retry-After header (delta-seconds form), clamped to [0, 60]; 5 when absent or unparsable.
-    static func retryAfterDelay(_ response: HTTPURLResponse) -> Double {
-        guard let header = response.value(forHTTPHeaderField: "Retry-After"),
-              let seconds = Double(header.trimmingCharacters(in: .whitespaces)),
-              seconds.isFinite else {
-            return defaultRetryAfter
-        }
+    /// The longer of the Retry-After header (delta-seconds form) and the wait named in the error message
+    /// ("Please try again in 1m12.5s"), clamped to [0, 900]; 5 when neither is present or parsable.
+    static func retryAfterDelay(_ response: HTTPURLResponse, body: Data = Data()) -> Double {
+        let header = response.value(forHTTPHeaderField: "Retry-After")
+            .flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            .flatMap { $0.isFinite ? $0 : nil }
+        let named = waitNamed(in: errorMessage(from: body, redacting: ""))
+        guard let seconds = [header, named].compactMap(\.self).max() else { return defaultRetryAfter }
         return min(max(seconds, 0), maximumRetryAfter)
+    }
+
+    /// Seconds in "try again in 1h2m3.5s" or "345ms" (any of the h, m, s, ms parts), nil when absent.
+    static func waitNamed(in message: String) -> Double? {
+        guard let match = message.firstMatch(of: /try again in ((?:\d+(?:\.\d+)?(?:ms|[hms]))+)/) else { return nil }
+        var total = 0.0
+        for part in match.1.matches(of: /(\d+(?:\.\d+)?)(ms|[hms])/) {
+            let value = Double(part.1) ?? 0
+            switch part.2 {
+            case "h": total += value * 3600
+            case "m": total += value * 60
+            case "ms": total += value / 1000
+            default: total += value
+            }
+        }
+        return total
     }
 
     /// Server error text for `.http`: the JSON `error.message` when present, else the body, with the

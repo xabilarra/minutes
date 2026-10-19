@@ -129,12 +129,13 @@ actor TranscriptionPipeline {
             }
             try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
             let client = makeClient(apiKey)
+            let cache = ChunkCache(folder: folder, language: storedLanguage)
             let me = try await transcribeTrack(
                 Self.audioSource(.micRaw, .micAudio, in: folder), speaker: .me, language: language, client: client,
-                workDirectory: workDirectory)
+                workDirectory: workDirectory, cache: cache)
             let them = try await transcribeTrack(
                 Self.audioSource(.systemRaw, .systemAudio, in: folder), speaker: .them, language: language, client: client,
-                workDirectory: workDirectory)
+                workDirectory: workDirectory, cache: cache)
             let segments = TranscriptAssembler.assemble(me: me, them: them)
 
             // Raw tracks are deleted last: any failure before this point leaves everything retryable.
@@ -147,6 +148,7 @@ actor TranscriptionPipeline {
                 .write(to: folder.appending(path: MeetingFile.transcriptJSON.rawValue), options: .atomic)
             try MetadataStore.write(metadata, to: folder)
             removeRawAudio(in: folder)
+            cache.remove()
             logger.info("Transcribed \(folder.lastPathComponent, privacy: .private(mask: .hash)): \(segments.count) segments")
             return nil
         } catch {
@@ -167,7 +169,7 @@ actor TranscriptionPipeline {
     }
 
     private func transcribeTrack(
-        _ source: URL?, speaker: Speaker, language: String?, client: GroqClient, workDirectory: URL
+        _ source: URL?, speaker: Speaker, language: String?, client: GroqClient, workDirectory: URL, cache: ChunkCache
     ) async throws -> [TranscriptSegment] {
         guard let url = source else { return [] }
         let chunks = ChunkPlan.chunks(totalDuration: try AudioFileTools.duration(of: url))
@@ -179,9 +181,15 @@ actor TranscriptionPipeline {
                     results[index] = segments
                     inFlight -= 1
                 }
+                if let cached = cache.segments(speaker: speaker, chunk: chunk) {
+                    results[chunk.index] = cached
+                    continue
+                }
                 group.addTask {
-                    try await Self.transcribeChunk(
+                    let (index, segments) = try await Self.transcribeChunk(
                         chunk, of: url, speaker: speaker, language: language, client: client, workDirectory: workDirectory)
+                    cache.store(segments, speaker: speaker, chunk: chunk)
+                    return (index, segments)
                 }
                 inFlight += 1
             }
@@ -257,5 +265,40 @@ actor TranscriptionPipeline {
     private func publish() {
         status.queued = queue.count
         onStatus(status)
+    }
+}
+
+/// Transcribed chunks kept in the meeting folder until the transcript is written, so a retry
+/// (after Groq's hourly limit, a network failure or a quit) only sends the audio still missing.
+struct ChunkCache: Sendable {
+    static let directoryName = ".transcripcion-parcial"
+
+    let directory: URL
+    let language: String
+
+    init(folder: URL, language: String) {
+        directory = folder.appending(path: Self.directoryName, directoryHint: .isDirectory)
+        self.language = language
+    }
+
+    func segments(speaker: Speaker, chunk: AudioChunk) -> [TranscriptSegment]? {
+        guard let data = try? Data(contentsOf: url(speaker, chunk)) else { return nil }
+        return try? JSONDecoder().decode([TranscriptSegment].self, from: data)
+    }
+
+    /// Best effort: a chunk that cannot be cached is simply transcribed again on a retry.
+    func store(_ segments: [TranscriptSegment], speaker: Speaker, chunk: AudioChunk) {
+        guard let data = try? JSONEncoder().encode(segments) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: url(speaker, chunk), options: .atomic)
+    }
+
+    func remove() {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    /// Language, start and duration are part of the name, so another language or chunk plan never reuses a stale chunk.
+    private func url(_ speaker: Speaker, _ chunk: AudioChunk) -> URL {
+        directory.appending(path: "\(language)-\(speaker.rawValue)-\(chunk.index)-\(Int(chunk.start))-\(Int(chunk.duration)).json")
     }
 }

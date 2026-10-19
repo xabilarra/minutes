@@ -148,17 +148,69 @@ private actor SleepRecorder {
         #expect(await transport.requests.count == 2)
     }
 
-    @Test func rateLimitWaitDefaultsToFiveSecondsAndIsCappedAtSixty() async throws {
+    @Test func rateLimitWaitDefaultsToFiveSecondsAndIsCappedAtFifteenMinutes() async throws {
         let transport = FakeTransport([
             .response(status: 429, body: "{}"),
-            .response(status: 429, body: "{}", headers: ["retry-after": "120"]),
+            .response(status: 429, body: "{}", headers: ["retry-after": "1200"]),
             .response(status: 200, body: verboseJSON),
         ])
         let sleeps = SleepRecorder()
         _ = try await withAudioFile { file in
             try await client(transport, sleeps).transcribe(fileURL: file)
         }
-        #expect(await sleeps.delays == [5, 60])
+        #expect(await sleeps.delays == [5, 900])
+    }
+
+    /// Groq's audio-seconds-per-hour limit names the wait only in the message ("try again in 1m12s").
+    @Test func rateLimitWaitsTheTimeGroqNamesInTheMessage() async throws {
+        let message = #"{"error":{"message":"Rate limit reached for model `whisper-large-v3` on seconds of audio per hour (ASPH): Limit 7200, Used 6744, Requested 600. Please try again in 1m12.5s. Need more tokens?"}}"#
+        let transport = FakeTransport([
+            .response(status: 429, body: message, headers: ["Retry-After": "3"]),
+            .response(status: 429, body: #"{"error":{"message":"Please try again in 8s."}}"#),
+            .response(status: 200, body: verboseJSON),
+        ])
+        let sleeps = SleepRecorder()
+        _ = try await withAudioFile { file in
+            try await client(transport, sleeps).transcribe(fileURL: file)
+        }
+        #expect(await sleeps.delays == [72.5, 8])
+    }
+
+    @Test func rateLimitReadsMillisecondsInTheMessageAsMilliseconds() async throws {
+        let transport = FakeTransport([
+            .response(status: 429, body: #"{"error":{"message":"Please try again in 345ms."}}"#),
+            .response(status: 429, body: #"{"error":{"message":"Please try again in 1m2.5s."}}"#),
+            .response(status: 200, body: verboseJSON),
+        ])
+        let sleeps = SleepRecorder()
+        _ = try await withAudioFile { file in
+            try await client(transport, sleeps).transcribe(fileURL: file)
+        }
+        #expect(await sleeps.delays == [0.345, 62.5])
+    }
+
+    /// An hour-long meeting can hit the hourly limit many times: waiting it out must not use up the attempts.
+    @Test func rateLimitWaitsDoNotUseUpTheAttempts() async throws {
+        let transport = FakeTransport([
+            .response(status: 429, body: "{}"),
+            .response(status: 429, body: "{}"),
+            .response(status: 429, body: "{}"),
+            .response(status: 200, body: verboseJSON),
+        ])
+        let segments = try await withAudioFile { file in
+            try await client(transport, SleepRecorder(), maxAttempts: 2).transcribe(fileURL: file)
+        }
+        #expect(segments == expectedSegments)
+    }
+
+    @Test func rateLimitGivesUpAfterTwentyWaits() async throws {
+        let transport = FakeTransport(Array(repeating: .response(status: 429, body: "{}"), count: 30))
+        await #expect(throws: GroqError.self) {
+            try await withAudioFile { file in
+                try await client(transport, SleepRecorder()).transcribe(fileURL: file)
+            }
+        }
+        #expect(await transport.requests.count == 21)
     }
 
     @Test func serverErrorsAndNetworkFailuresAreRetriedWithExponentialBackoff() async throws {

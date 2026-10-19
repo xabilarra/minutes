@@ -56,6 +56,84 @@ import Testing
         #expect(exists(folder, .systemAudio))
     }
 
+    /// A retry after a failure (Groq's hourly limit) must not pay again for the audio already transcribed.
+    @Test func aRetryReusesTheChunksAlreadyTranscribed() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "2026-10-19 10.30 Test (Zoom)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3)
+        try writeTone(to: folder.appending(path: MeetingFile.systemRaw.rawValue), seconds: 3)
+        try MetadataStore.write(
+            MeetingMetadata(
+                appName: "Zoom", appBundleID: "us.zoom.xos", title: "Test", windowTitle: nil,
+                trigger: "auto", startedAt: Date(), hasVideo: false),
+            to: folder)
+
+        let transport = FailingThemOnceTransport()
+        let (finished, continuation) = AsyncStream.makeStream(of: Bool.self)
+        let pipeline = TranscriptionPipeline(
+            root: root,
+            apiKeyProvider: { "gsk_test" },
+            makeClient: { GroqClient(apiKey: $0, transport: transport, sleeper: { _ in }) },
+            onStatus: { _ in },
+            onFinished: { _, failure in continuation.yield(failure != nil) })
+        var results = finished.makeAsyncIterator()
+
+        await pipeline.enqueue(folder)
+        #expect(await results.next() == true)
+        await pipeline.retryFailed()
+        #expect(await results.next() == false)
+
+        #expect(await transport.requests(for: .me) == 1)
+        #expect(await transport.requests(for: .them) == 2)
+        let markdown = try String(
+            contentsOf: folder.appending(path: MeetingFile.transcriptMarkdown.rawValue), encoding: .utf8)
+        #expect(markdown.contains("Yo: hola soy yo"))
+        #expect(markdown.contains("Ellos: hola somos ellos"))
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(Set(leftovers) == Set([
+            MeetingFile.micAudio, .systemAudio, .transcriptMarkdown, .transcriptJSON, .metadata,
+        ].map(\.rawValue)))
+    }
+
+    /// Chunks cached in one language are not reused after the user switches language for a retry.
+    @Test func aRetryInAnotherLanguageTranscribesAgain() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "2026-10-19 10.30 Test (Zoom)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3)
+        try writeTone(to: folder.appending(path: MeetingFile.systemRaw.rawValue), seconds: 3)
+        try MetadataStore.write(
+            MeetingMetadata(
+                appName: "Zoom", appBundleID: "us.zoom.xos", title: "Test", windowTitle: nil,
+                trigger: "auto", startedAt: Date(), hasVideo: false),
+            to: folder)
+
+        let transport = FailingThemOnceTransport()
+        let language = LanguageBox("es")
+        let (finished, continuation) = AsyncStream.makeStream(of: Bool.self)
+        let pipeline = TranscriptionPipeline(
+            root: root,
+            apiKeyProvider: { "gsk_test" },
+            languageProvider: { language.value },
+            makeClient: { GroqClient(apiKey: $0, transport: transport, sleeper: { _ in }) },
+            onStatus: { _ in },
+            onFinished: { _, failure in continuation.yield(failure != nil) })
+        var results = finished.makeAsyncIterator()
+
+        await pipeline.enqueue(folder)
+        #expect(await results.next() == true)
+        language.value = "en"
+        await pipeline.retryFailed()
+        #expect(await results.next() == false)
+
+        #expect(await transport.requests(for: .me) == 2)
+    }
+
     @Test func dropsSegmentsWhoseAudioIsSilentBecauseWhisperInventsThem() async throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -188,6 +266,36 @@ private struct FixedGroqTransport: HTTPTransport {
         let response = HTTPURLResponse(
             url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
         return (Data(json.utf8), response)
+    }
+}
+
+private final class LanguageBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: String?
+
+    init(_ value: String?) { stored = value }
+
+    var value: String? {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}
+
+/// Answers like `FakeGroqTransport`, but rejects the first "Ellos" chunk; counts requests per track.
+private actor FailingThemOnceTransport: HTTPTransport {
+    private var counts: [Speaker: Int] = [:]
+
+    func requests(for speaker: Speaker) -> Int { counts[speaker] ?? 0 }
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+        let speaker: Speaker = body.contains("\(Speaker.me.rawValue)-0.m4a") ? .me : .them
+        counts[speaker, default: 0] += 1
+        if speaker == .them, counts[speaker] == 1 {
+            let response = HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!
+            return (Data(#"{"error":{"message":"rejected"}}"#.utf8), response)
+        }
+        return try await FakeGroqTransport().send(request)
     }
 }
 
