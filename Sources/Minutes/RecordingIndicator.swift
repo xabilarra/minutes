@@ -23,6 +23,11 @@ final class RecordingIndicator {
     private var hostingView: NSHostingView<IndicatorView>?
     private var hideTask: Task<Void, Never>?
 
+    /// The panel's current size, nil before it is first shown.
+    var panelSize: NSSize? { panel?.frame.size }
+    /// The size the pill's content asks for right now.
+    var contentFittingSize: NSSize? { hostingView?.fittingSize }
+
     func showRecording(appName: String, since: Date) {
         show(.recording(appName: appName, since: since, stopDeadline: nil), hideAfter: nil)
     }
@@ -86,6 +91,9 @@ final class RecordingIndicator {
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
         let hostingView = NSHostingView(rootView: makeRootView())
+        // Only `place` sizes the panel. Letting the hosting view resize the window whenever the text
+        // width changed crashed AppKit with an endless Update Constraints loop (2026-10-19).
+        hostingView.sizingOptions = []
         panel.contentView = hostingView
         self.hostingView = hostingView
         return panel
@@ -168,6 +176,7 @@ private struct IndicatorView: View {
                 Text("Se detiene en \(Self.remaining(until: stopDeadline, now: context.date))")
                     .font(.callout.monospacedDigit())
             }
+            .fixedSize()
             Button("Detener ya", action: actions.stop)
                 .buttonStyle(PillButtonStyle(tint: .red))
         case .recording(let appName, let since, nil):
@@ -179,9 +188,14 @@ private struct IndicatorView: View {
                 .onAppear { pulse = true }
             Text("Grabando").font(.callout.weight(.semibold))
             Text(appName).font(.callout).foregroundStyle(.secondary)
-            TimelineView(.periodic(from: since, by: 1)) { context in
-                Text(Self.elapsed(from: since, to: context.date)).font(.callout.monospacedDigit())
-            }
+            // Sized for "0:00:00" so the pill keeps its width when the recording passes an hour.
+            Text(verbatim: "0:00:00").font(.callout.monospacedDigit()).hidden()
+                .overlay(alignment: .leading) {
+                    TimelineView(.periodic(from: since, by: 1)) { context in
+                        Text(Self.elapsed(from: since, to: context.date)).font(.callout.monospacedDigit())
+                            .fixedSize()
+                    }
+                }
             Button("Detener", action: actions.stop)
                 .buttonStyle(PillButtonStyle(tint: .red))
         case .transcribing(let folder):
