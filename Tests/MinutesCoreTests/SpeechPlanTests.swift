@@ -54,6 +54,24 @@ import MinutesCore
         #expect(chunks.allSatisfy { $0.duration <= 600 })
     }
 
+    /// Groq bills a sliver as 10 s and Whisper tends to hallucinate on it.
+    @Test func aSplitRemainderShorterThanTheMinimumTailStaysInThePreviousChunk() {
+        #expect(SpeechPlan.chunks([AudioPiece(start: 0, duration: 1200.3)]) == [
+            SpeechChunk(index: 0, pieces: [AudioPiece(start: 0, duration: 600)]),
+            SpeechChunk(index: 1, pieces: [AudioPiece(start: 600, duration: 600.3)]),
+        ])
+        #expect(SpeechPlan.chunks([AudioPiece(start: 0, duration: 1202)]).map(\.duration) == [600, 600, 2])
+    }
+
+    @Test func aFullChunkNeverGetsAnEmptyPiece() {
+        let chunks = SpeechPlan.chunks([AudioPiece(start: 0, duration: 600), AudioPiece(start: 1000, duration: 700)])
+        #expect(chunks == [
+            SpeechChunk(index: 0, pieces: [AudioPiece(start: 0, duration: 600)]),
+            SpeechChunk(index: 1, pieces: [AudioPiece(start: 1000, duration: 600)]),
+            SpeechChunk(index: 2, pieces: [AudioPiece(start: 1600, duration: 100)]),
+        ])
+    }
+
     @Test func mapsUploadedTimesBackToTheTrack() {
         let chunk = SpeechChunk(index: 0, pieces: [AudioPiece(start: 10, duration: 5), AudioPiece(start: 60, duration: 5)])
         #expect(chunk.trackTime(0) == 10)

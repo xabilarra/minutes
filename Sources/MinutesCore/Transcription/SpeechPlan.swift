@@ -87,8 +87,9 @@ public enum SpeechPlan {
 
     /// Packs pieces in order into chunks of at most `chunkLength` seconds of audio (Groq's 25 MB
     /// attachment limit). A piece that does not fit starts a new chunk; only a piece longer than
-    /// `chunkLength` is split.
-    public static func chunks(_ pieces: [AudioPiece], chunkLength: Double = 600) -> [SpeechChunk] {
+    /// `chunkLength` is split, and a split remainder shorter than `minimumTail` stays in the chunk
+    /// before it, which Groq would otherwise bill as 10 s and Whisper tends to hallucinate on.
+    public static func chunks(_ pieces: [AudioPiece], chunkLength: Double = 600, minimumTail: Double = 2) -> [SpeechChunk] {
         guard chunkLength > 0 else { return [] }
         var chunks: [[AudioPiece]] = []
         var current: [AudioPiece] = []
@@ -105,7 +106,8 @@ public enum SpeechPlan {
             var rest = piece
             while currentDuration + rest.duration > chunkLength {
                 let fits = chunkLength - currentDuration
-                current.append(AudioPiece(start: rest.start, duration: fits))
+                if rest.duration - fits < minimumTail { break }
+                if fits > 0 { current.append(AudioPiece(start: rest.start, duration: fits)) }
                 close()
                 rest = AudioPiece(start: rest.start + fits, duration: rest.duration - fits)
             }
