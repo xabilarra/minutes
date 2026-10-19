@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "Minutes records your microphone during meetings to transcribe what you say.";
+"NSAudioCaptureUsageDescription" = "Minutes records the meeting audio playing on this Mac to transcribe what other participants say.";
