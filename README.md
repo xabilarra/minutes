@@ -13,10 +13,6 @@
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white)](Package.swift)
 [![License: MIT](https://img.shields.io/badge/License-MIT-6B40BF?style=for-the-badge)](LICENSE)
 
-<a href="https://github.com/Gentleman-Programming/gentle-ai">
-  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
-</a>
-
 <img src="docs/images/hero-en.jpg" alt="The Minutes window and the floating recording indicator" width="100%">
 
 </div>
@@ -150,6 +146,10 @@ For an end-to-end check, quit Minutes and run `open build/Minutes.app --args --s
 ## 💜 Made with Gentle AI
 
 Minutes was designed, built, reviewed and tested with [Gentle AI](https://github.com/Gentleman-Programming/gentle-ai), which sets up AI coding agents with persistent memory, Organic-Driven Development and bounded code review.
+
+<a href="https://github.com/Gentleman-Programming/gentle-ai">
+  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
+</a>
 
 ## 📄 License
 

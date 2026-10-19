@@ -13,10 +13,6 @@
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white)](Package.swift)
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-6B40BF?style=for-the-badge)](LICENSE)
 
-<a href="https://github.com/Gentleman-Programming/gentle-ai">
-  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
-</a>
-
 <img src="docs/images/hero-es.jpg" alt="La ventana de Minutes y la pastilla flotante de grabación" width="100%">
 
 </div>
@@ -150,6 +146,10 @@ Para una prueba de principio a fin, cierra Minutes y ejecuta `open build/Minutes
 ## 💜 Hecho con Gentle AI
 
 Minutes se ha diseñado, construido, revisado y probado con [Gentle AI](https://github.com/Gentleman-Programming/gentle-ai), que configura los agentes de programación con IA con memoria persistente, Organic-Driven Development y revisión de código acotada.
+
+<a href="https://github.com/Gentleman-Programming/gentle-ai">
+  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
+</a>
 
 ## 📄 Licencia
 
