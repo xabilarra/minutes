@@ -25,7 +25,7 @@ Minutes is a tiny native menu-bar app for macOS. It notices when a call starts, 
 git clone https://github.com/xabilarra/minutes.git
 cd minutes
 scripts/build-app.sh --install
-open ~/Applications/Minutes.app
+open /Applications/Minutes.app
 ```
 
 1. Grant **Microphone**, **Screen & System Audio Recording** and **System audio** from the Minutes window.
@@ -111,7 +111,7 @@ Folder, file and speaker names are Spanish: *Reuniones* = meetings, *transcripci
 
 ## 🛠️ Install
 
-`scripts/build-app.sh --install` builds a release, signs it and copies `Minutes.app` to `~/Applications`.
+`scripts/build-app.sh --install` builds a release, signs it and copies `Minutes.app` to `/Applications`.
 
 It signs with your **Apple Development** certificate when you have one (free: Xcode → Settings → Accounts → Manage Certificates). macOS ties privacy permissions to the signature, so with a certificate it remembers them across rebuilds. Without one, the app is signed ad hoc and macOS asks again after every rebuild.
 

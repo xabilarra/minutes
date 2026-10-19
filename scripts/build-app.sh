@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds Minutes.app (release), signs it with an Apple Development identity so macOS keeps the
-# privacy permissions across rebuilds, and with --install copies it to ~/Applications.
+# privacy permissions across rebuilds, and with --install copies it to /Applications.
 #
 # Usage: scripts/build-app.sh [--install]
 #   SIGN_IDENTITY="Apple Development: …"  override the signing identity
@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Minutes.app"
-DEST="$HOME/Applications/Minutes.app"
+DEST="/Applications/Minutes.app"
 
 swift build -c release --package-path "$ROOT" --product Minutes
 BIN_DIR="$(swift build -c release --package-path "$ROOT" --show-bin-path)"
@@ -38,7 +38,6 @@ if [ "${1:-}" = "--install" ]; then
     echo "Minutes is running. Quit it from the menu bar first (a recording may be in progress)." >&2
     exit 1
   fi
-  mkdir -p "$HOME/Applications"
   rm -rf "$DEST"
   cp -R "$APP" "$DEST"
   echo "Installed $DEST"

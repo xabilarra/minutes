@@ -25,7 +25,7 @@ Minutes es una app nativa y diminuta para la barra de menús de macOS. Detecta c
 git clone https://github.com/xabilarra/minutes.git
 cd minutes
 scripts/build-app.sh --install
-open ~/Applications/Minutes.app
+open /Applications/Minutes.app
 ```
 
 1. Concede **Micrófono**, **Grabación de pantalla y audio del sistema** y **Audio del sistema** desde la ventana de Minutes.
@@ -111,7 +111,7 @@ Los vídeos van a la Papelera pasado el tiempo que elijas (7, 30, 90 días o nun
 
 ## 🛠️ Instalación
 
-`scripts/build-app.sh --install` compila una versión release, la firma y copia `Minutes.app` a `~/Applications`.
+`scripts/build-app.sh --install` compila una versión release, la firma y copia `Minutes.app` a `/Applications`.
 
 Firma con tu certificado **Apple Development** si lo tienes (es gratis: Xcode → Ajustes → Cuentas → Gestionar certificados). macOS asocia los permisos de privacidad a la firma, así que con certificado los recuerda entre compilaciones. Sin él, la app se firma *ad hoc* y macOS vuelve a pedir los permisos tras cada compilación.
 
