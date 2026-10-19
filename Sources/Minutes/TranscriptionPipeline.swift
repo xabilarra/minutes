@@ -29,8 +29,6 @@ actor TranscriptionPipeline {
     }
 
     static let chunkConcurrency = 3
-    /// Chunks whose loudest 0.5 s window is quieter than this are not sent (saves cost, avoids hallucinations).
-    static let silenceThresholdDB = -50.0
 
     private let root: URL
     private let apiKeyProvider: @Sendable () -> String?
@@ -172,7 +170,10 @@ actor TranscriptionPipeline {
         _ source: URL?, speaker: Speaker, language: String?, client: GroqClient, workDirectory: URL, cache: ChunkCache
     ) async throws -> [TranscriptSegment] {
         guard let url = source else { return [] }
-        let chunks = ChunkPlan.chunks(totalDuration: try AudioFileTools.duration(of: url))
+        let pieces = SpeechPlan.pieces(
+            levels: try AudioFileTools.windowLevelsDB(of: url), windowDuration: AudioFileTools.levelWindowDuration,
+            totalDuration: try AudioFileTools.duration(of: url), thresholdDB: Self.segmentSilenceThresholdDB)
+        let chunks = SpeechPlan.chunks(pieces)
         var results: [Int: [TranscriptSegment]] = [:]
         try await withThrowingTaskGroup(of: (Int, [TranscriptSegment]).self) { group in
             var inFlight = 0
@@ -201,22 +202,20 @@ actor TranscriptionPipeline {
     }
 
     private static func transcribeChunk(
-        _ chunk: AudioChunk, of url: URL, speaker: Speaker, language: String?, client: GroqClient, workDirectory: URL
+        _ chunk: SpeechChunk, of url: URL, speaker: Speaker, language: String?, client: GroqClient, workDirectory: URL
     ) async throws -> (Int, [TranscriptSegment]) {
-        let level = try AudioFileTools.peakWindowLevelDB(of: url, start: chunk.start, duration: chunk.duration)
-        guard level > silenceThresholdDB else { return (chunk.index, []) }
         let chunkURL = workDirectory.appending(path: "\(speaker.rawValue)-\(chunk.index).m4a")
-        try AudioFileTools.exportM4A(from: url, to: chunkURL, start: chunk.start, duration: chunk.duration)
+        try AudioFileTools.exportM4A(from: url, to: chunkURL, ranges: chunk.pieces.map { ($0.start, $0.duration) })
         defer { try? FileManager.default.removeItem(at: chunkURL) }
         let raw = try await client.transcribe(fileURL: chunkURL, language: language)
-        let segments = TranscriptAssembler.segments(from: raw, chunkStart: chunk.start, speaker: speaker)
+        let segments = TranscriptAssembler.segments(from: raw, chunk: chunk, speaker: speaker)
         // A level that cannot be read keeps the segment: losing speech is worse than keeping a guess.
         return (chunk.index, segments.filter { (try? isAudible($0, in: url)) ?? true })
     }
 
     /// Whisper invents text ("Gracias.") over silence. Calibrated on a real Meet test: invented
     /// segments peaked at -57…-65 dB, faint real speech at -43 dB, normal speech at -24…-30 dB;
-    /// -50 dB leaves about 7 dB of margin on each side.
+    /// -50 dB leaves about 7 dB of margin on each side. Audio quieter than this is not uploaded either.
     static let segmentSilenceThresholdDB = -50.0
 
     private static func isAudible(_ segment: TranscriptSegment, in url: URL) throws -> Bool {
@@ -281,13 +280,13 @@ struct ChunkCache: Sendable {
         self.language = language
     }
 
-    func segments(speaker: Speaker, chunk: AudioChunk) -> [TranscriptSegment]? {
+    func segments(speaker: Speaker, chunk: SpeechChunk) -> [TranscriptSegment]? {
         guard let data = try? Data(contentsOf: url(speaker, chunk)) else { return nil }
         return try? JSONDecoder().decode([TranscriptSegment].self, from: data)
     }
 
     /// Best effort: a chunk that cannot be cached is simply transcribed again on a retry.
-    func store(_ segments: [TranscriptSegment], speaker: Speaker, chunk: AudioChunk) {
+    func store(_ segments: [TranscriptSegment], speaker: Speaker, chunk: SpeechChunk) {
         guard let data = try? JSONEncoder().encode(segments) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: url(speaker, chunk), options: .atomic)
@@ -297,8 +296,10 @@ struct ChunkCache: Sendable {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// Language, start and duration are part of the name, so another language or chunk plan never reuses a stale chunk.
-    private func url(_ speaker: Speaker, _ chunk: AudioChunk) -> URL {
-        directory.appending(path: "\(language)-\(speaker.rawValue)-\(chunk.index)-\(Int(chunk.start))-\(Int(chunk.duration)).json")
+    /// Language and the chunk's pieces are part of the name, so another language or chunk plan never reuses a stale chunk.
+    private func url(_ speaker: Speaker, _ chunk: SpeechChunk) -> URL {
+        let start = Int(chunk.pieces.first?.start ?? 0), duration = Int(chunk.duration * 10)
+        return directory.appending(
+            path: "\(language)-\(speaker.rawValue)-\(chunk.index)-speech-\(start)-\(duration)-\(chunk.pieces.count).json")
     }
 }

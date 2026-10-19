@@ -2,14 +2,19 @@ import Testing
 import MinutesCore
 
 @Suite struct TranscriptAssemblerTests {
-    @Test func segmentsAreCleanedOffsetByTheChunkStartAndLabelled() {
+    @Test func segmentsAreCleanedMappedToTheTrackAndLabelled() {
         let raw = [
             RawSegment(start: 0, end: 2.5, text: " Hola "),
             RawSegment(start: 3, end: 4, text: ""),
             RawSegment(start: 5, end: 6, text: "¡Suscríbete!"),
         ]
-        #expect(TranscriptAssembler.segments(from: raw, chunkStart: 600, speaker: .me) == [
+        let chunk = SpeechChunk(index: 1, pieces: [AudioPiece(start: 600, duration: 2.5), AudioPiece(start: 700, duration: 10)])
+        #expect(TranscriptAssembler.segments(from: raw, chunk: chunk, speaker: .me) == [
             TranscriptSegment(speaker: .me, start: 600, end: 602.5, text: "Hola"),
+        ])
+        let later = [RawSegment(start: 3, end: 4.5, text: "Adiós")]
+        #expect(TranscriptAssembler.segments(from: later, chunk: chunk, speaker: .them) == [
+            TranscriptSegment(speaker: .them, start: 700.5, end: 702, text: "Adiós"),
         ])
     }
 

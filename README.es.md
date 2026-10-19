@@ -73,7 +73,7 @@ flowchart LR
 - **Detección**: cada segundo consulta a Core Audio qué procesos usan la entrada de audio y los compara con las apps de reuniones conocidas. Las pestañas del navegador solo cuentan si el título de la ventana parece una reunión.
 - **Audio**: un *process tap* global y privado graba el audio del sistema, y `AVAudioEngine` graba el micrófono; ambos en mono a 16 kHz, alineados con el reloj del sistema.
 - **Vídeo**: ScreenCaptureKit y `AVAssetWriter` (HEVC), escrito como película fragmentada que sobrevive a un cierre inesperado y convertida a MP4 al final. Las ventanas de Minutes nunca salen en el vídeo.
-- **Transcripción** al terminar la llamada: trozos de hasta 10 minutos, se saltan los silenciosos, se descartan los segmentos sobre silencio y las alucinaciones típicas de Whisper, y se quita el eco de los demás de tu micrófono.
+- **Transcripción** al terminar la llamada: solo se envía la voz de cada pista (los silencios de 3 s o más, mientras habla el otro, no se suben; en reuniones reales es menos de la mitad del audio), en trozos de hasta 10 minutos; se descartan los segmentos sobre silencio y las alucinaciones típicas de Whisper, y se quita el eco de los demás de tu micrófono.
 
 ## 📁 Qué obtienes
 
@@ -107,7 +107,7 @@ Los vídeos van a la Papelera pasado el tiempo que elijas (7, 30, 90 días o nun
 
 - macOS 15 o posterior
 - Xcode 16 o posterior (Swift 6) para compilar
-- Una [clave de API de Groq](https://console.groq.com/keys): `whisper-large-v3` cuesta unos 0,11 $ por hora de audio en el momento de escribir esto, y cada reunión tiene dos pistas
+- Una [clave de API de Groq](https://console.groq.com/keys): `whisper-large-v3` cuesta unos 0,11 $ por hora de audio en el momento de escribir esto, y cada reunión tiene dos pistas, de las que solo se sube la voz. El plan gratuito limita el audio por hora (7200 s cuando se escribió esto), así que una reunión larga puede esperar a que se libere; el plan de pago lo quita
 
 ## 🛠️ Instalación
 

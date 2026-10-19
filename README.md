@@ -73,7 +73,7 @@ flowchart LR
 - **Detection** polls Core Audio's process list every second for apps whose audio input is running and matches them against known meeting apps. Browser tabs count only when the window title looks like a meeting.
 - **Audio**: a private global process tap records system audio and `AVAudioEngine` records the microphone, both as 16 kHz mono tracks aligned on the host clock.
 - **Video**: ScreenCaptureKit and `AVAssetWriter` (HEVC), written as a crash-tolerant fragmented movie and remuxed to MP4 at the end. Minutes' own windows are never recorded.
-- **Transcription** runs after the call: chunks of up to 10 minutes, silent chunks skipped, segments over silence and known Whisper hallucinations dropped, microphone echo of the other side removed.
+- **Transcription** runs after the call: only the speech of each track is sent (silences of 3 s or more, while the other side talks, are not uploaded; in real meetings that is less than half the audio), in chunks of up to 10 minutes; segments over silence and known Whisper hallucinations dropped, microphone echo of the other side removed.
 
 ## 📁 What you get
 
@@ -107,7 +107,7 @@ Folder, file and speaker names are Spanish: *Reuniones* = meetings, *transcripci
 
 - macOS 15 or later
 - Xcode 16 or later (Swift 6) to build
-- A [Groq API key](https://console.groq.com/keys): `whisper-large-v3` costs around $0.11 per audio hour at the time of writing, and a meeting has two tracks
+- A [Groq API key](https://console.groq.com/keys): `whisper-large-v3` costs around $0.11 per audio hour at the time of writing, and a meeting has two tracks, of which only the speech is uploaded. The free plan caps audio per hour (7200 s at the time of writing), so a long meeting may wait for the quota to free up; the paid plan lifts it
 
 ## 🛠️ Install
 

@@ -140,8 +140,8 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
         let folder = root.appending(path: "2026-10-19 10.30 Test (Google Meet)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // 3 s of digital silence, then 3 s of tone: Whisper "hears" a "Gracias." in the silence.
-        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3, leadingSilence: 3)
+        // 1 s of digital silence (too short to be cut), then 3 s of tone: Whisper "hears" a "Gracias." in the silence.
+        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3, leadingSilence: 1)
         try MetadataStore.write(
             MeetingMetadata(
                 appName: "Google Meet", appBundleID: "com.google.Chrome", title: nil, windowTitle: nil,
@@ -154,7 +154,7 @@ import Testing
             apiKeyProvider: { "gsk_test" },
             makeClient: {
                 GroqClient(apiKey: $0, transport: FixedGroqTransport(segments: [
-                    (0.5, 2.0, "Gracias."), (3.5, 5.5, "hola soy yo"),
+                    (0.1, 0.9, "Gracias."), (1.5, 3.5, "hola soy yo"),
                 ]), sleeper: { _ in })
             },
             onStatus: { _ in },
@@ -167,6 +167,44 @@ import Testing
             contentsOf: folder.appending(path: MeetingFile.transcriptMarkdown.rawValue), encoding: .utf8)
         #expect(markdown.contains("Yo: hola soy yo"))
         #expect(!markdown.contains("Gracias"))
+    }
+
+    /// Only the speech is uploaded (Groq bills and rate-limits seconds of audio), and Whisper's times
+    /// in the uploaded audio are mapped back to the recording.
+    @Test func uploadsOnlyTheSpeechAndKeepsTheRecordingTimes() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "2026-10-19 10.30 Test (Zoom)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // The other side talks for 20 s, then the user speaks for 3 s.
+        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3, leadingSilence: 20)
+        try MetadataStore.write(
+            MeetingMetadata(
+                appName: "Zoom", appBundleID: "us.zoom.xos", title: nil, windowTitle: nil,
+                trigger: "auto", startedAt: Date(), hasVideo: false),
+            to: folder)
+
+        let transport = RecordingGroqTransport()
+        let (finished, continuation) = AsyncStream.makeStream(of: Bool.self)
+        let pipeline = TranscriptionPipeline(
+            root: root,
+            apiKeyProvider: { "gsk_test" },
+            makeClient: { GroqClient(apiKey: $0, transport: transport, sleeper: { _ in }) },
+            onStatus: { _ in },
+            onFinished: { _, failure in continuation.yield(failure != nil) })
+        var results = finished.makeAsyncIterator()
+
+        await pipeline.enqueue(folder)
+        #expect(await results.next() == false)
+        #expect(await transport.bodies.count == 1)
+        // 1 s of context before the speech and after it, through the end of the track: 4 s of 23 s.
+        let uploaded = try #require(await transport.uploadedDurations.first)
+        #expect(abs(uploaded - 4) < 0.2)
+        let markdown = try String(
+            contentsOf: folder.appending(path: MeetingFile.transcriptMarkdown.rawValue), encoding: .utf8)
+        // Whisper's "hola" at 0 s of the upload is at 19 s of the recording.
+        #expect(markdown.contains("[00:00:19] Yo: hola"))
     }
 
     @Test(arguments: [("en", true), (nil, false)] as [(String?, Bool)])
@@ -299,15 +337,31 @@ private actor FailingThemOnceTransport: HTTPTransport {
     }
 }
 
-/// Captures every request body and answers with one short segment.
+/// Captures every request body and the duration of its audio, and answers with one short segment.
 private actor RecordingGroqTransport: HTTPTransport {
     private(set) var bodies: [String] = []
+    private(set) var uploadedDurations: [Double] = []
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        bodies.append(String(decoding: request.httpBody ?? Data(), as: UTF8.self))
+        let data = request.httpBody ?? Data()
+        bodies.append(String(decoding: data, as: UTF8.self))
+        uploadedDurations.append(Self.audioDuration(inMultipart: data))
         let json = #"{"text":"hola","segments":[{"start":0.0,"end":2.5,"text":" hola","avg_logprob":-0.2,"no_speech_prob":0.01,"compression_ratio":1.1}]}"#
         let response = HTTPURLResponse(
             url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
         return (Data(json.utf8), response)
+    }
+
+    /// Duration of the m4a in a multipart body, read by writing the bytes after the file part's headers to disk.
+    private static func audioDuration(inMultipart body: Data) -> Double {
+        let headerEnd = Data("\r\n\r\n".utf8)
+        guard let fileHeader = body.range(of: Data("filename=".utf8)),
+              let start = body.range(of: headerEnd, in: fileHeader.upperBound..<body.endIndex)?.upperBound,
+              let end = body.range(of: Data("\r\n--".utf8), in: start..<body.endIndex)?.lowerBound
+        else { return -1 }
+        let url = FileManager.default.temporaryDirectory.appending(path: "upload-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard (try? body[start..<end].write(to: url)) != nil else { return -1 }
+        return (try? AudioFileTools.duration(of: url)) ?? -1
     }
 }
