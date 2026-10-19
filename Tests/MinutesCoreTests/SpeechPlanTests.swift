@@ -72,6 +72,18 @@ import MinutesCore
         ])
     }
 
+    /// A chunk that kept a short remainder is already past the chunk length; the next long piece
+    /// must start a chunk of its own instead of overlapping it.
+    @Test func aLongPieceAfterAKeptRemainderDoesNotOverlap() {
+        let chunks = SpeechPlan.chunks([AudioPiece(start: 0, duration: 1201), AudioPiece(start: 2000, duration: 700)])
+        #expect(chunks == [
+            SpeechChunk(index: 0, pieces: [AudioPiece(start: 0, duration: 600)]),
+            SpeechChunk(index: 1, pieces: [AudioPiece(start: 600, duration: 601)]),
+            SpeechChunk(index: 2, pieces: [AudioPiece(start: 2000, duration: 600)]),
+            SpeechChunk(index: 3, pieces: [AudioPiece(start: 2600, duration: 100)]),
+        ])
+    }
+
     @Test func mapsUploadedTimesBackToTheTrack() {
         let chunk = SpeechChunk(index: 0, pieces: [AudioPiece(start: 10, duration: 5), AudioPiece(start: 60, duration: 5)])
         #expect(chunk.trackTime(0) == 10)

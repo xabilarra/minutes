@@ -105,7 +105,7 @@ public enum SpeechPlan {
             }
             var rest = piece
             while currentDuration + rest.duration > chunkLength {
-                let fits = chunkLength - currentDuration
+                let fits = max(0, chunkLength - currentDuration)
                 if rest.duration - fits < minimumTail { break }
                 if fits > 0 { current.append(AudioPiece(start: rest.start, duration: fits)) }
                 close()
