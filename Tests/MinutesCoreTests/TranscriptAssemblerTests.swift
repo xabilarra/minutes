@@ -18,6 +18,15 @@ import MinutesCore
         ])
     }
 
+    /// The silence cut out between two pieces is not part of a segment that runs across their joint.
+    @Test func aSegmentAcrossAJointKeepsItsSpokenLength() {
+        let chunk = SpeechChunk(index: 0, pieces: [AudioPiece(start: 600, duration: 2.5), AudioPiece(start: 700, duration: 10)])
+        let raw = [RawSegment(start: 2, end: 4, text: "Vale, de acuerdo")]
+        #expect(TranscriptAssembler.segments(from: raw, chunk: chunk, speaker: .them) == [
+            TranscriptSegment(speaker: .them, start: 602, end: 604, text: "Vale, de acuerdo"),
+        ])
+    }
+
     @Test func assembleSortsByStartPuttingSystemAudioFirstOnTies() {
         let me = [
             TranscriptSegment(speaker: .me, start: 5, end: 6, text: "a"),

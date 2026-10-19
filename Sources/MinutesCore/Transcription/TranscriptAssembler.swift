@@ -1,14 +1,12 @@
 /// Turns per-chunk Whisper output of both tracks into one speaker-labelled timeline.
 public enum TranscriptAssembler {
     /// Applies SegmentFilter.clean, then maps times from the uploaded chunk to the track and labels with speaker.
+    /// A segment across the joint of two pieces keeps its spoken length instead of spanning the silence cut out between them.
     public static func segments(from raw: [RawSegment], chunk: SpeechChunk, speaker: Speaker) -> [TranscriptSegment] {
         SegmentFilter.clean(raw).map { segment in
-            TranscriptSegment(
-                speaker: speaker,
-                start: chunk.trackTime(segment.start),
-                end: chunk.trackTime(segment.end, isEnd: true),
-                text: segment.text
-            )
+            let start = chunk.trackTime(segment.start)
+            let end = min(chunk.trackTime(segment.end, isEnd: true), start + max(0, segment.end - segment.start))
+            return TranscriptSegment(speaker: speaker, start: start, end: end, text: segment.text)
         }
     }
 
