@@ -12,7 +12,10 @@
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?style=for-the-badge&logo=apple&logoColor=white)](#-requisitos)
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white)](Package.swift)
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-6B40BF?style=for-the-badge)](LICENSE)
-[![Made with Gentle AI](https://img.shields.io/badge/Made%20with-Gentle%20AI-F095C8?style=for-the-badge&labelColor=1A1218)](https://github.com/Gentleman-Programming/gentle-ai)
+
+<a href="https://github.com/Gentleman-Programming/gentle-ai">
+  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
+</a>
 
 <img src="docs/images/hero-es.jpg" alt="La ventana de Minutes y la pastilla flotante de grabación" width="100%">
 
