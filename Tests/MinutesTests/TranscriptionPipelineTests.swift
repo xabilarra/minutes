@@ -242,6 +242,43 @@ import Testing
         #expect(try MetadataStore.read(from: folder).transcription.language == (language ?? "auto"))
     }
 
+    /// The vocabulary corrects the written transcript; Whisper never receives it as a prompt.
+    @Test func theVocabularyCorrectsTheTranscriptWithoutPromptingWhisper() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "2026-10-19 10.30 Test (Zoom)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try writeTone(to: folder.appending(path: MeetingFile.micRaw.rawValue), seconds: 3)
+        try MetadataStore.write(
+            MeetingMetadata(
+                appName: "Zoom", appBundleID: "us.zoom.xos", title: nil, windowTitle: nil,
+                trigger: "auto", startedAt: Date(), hasVideo: false),
+            to: folder)
+
+        let transport = RecordingGroqTransport()
+        let (finished, continuation) = AsyncStream.makeStream(of: Bool.self)
+        let pipeline = TranscriptionPipeline(
+            root: root,
+            apiKeyProvider: { "gsk_test" },
+            vocabularyProvider: { "Hola, Mobilia" },
+            makeClient: { GroqClient(apiKey: $0, transport: transport, sleeper: { _ in }) },
+            onStatus: { _ in },
+            onFinished: { _, failure in continuation.yield(failure != nil) })
+        var results = finished.makeAsyncIterator()
+
+        await pipeline.enqueue(folder)
+        #expect(await results.next() == false)
+        let body = try #require(await transport.bodies.first)
+        #expect(!body.contains("name=\"prompt\""))
+        let markdown = try String(
+            contentsOf: folder.appending(path: MeetingFile.transcriptMarkdown.rawValue), encoding: .utf8)
+        #expect(markdown.contains("Yo: Hola"))
+        let json = try String(
+            contentsOf: folder.appending(path: MeetingFile.transcriptJSON.rawValue), encoding: .utf8)
+        #expect(json.contains("\"Hola\""))
+    }
+
     private func exists(_ folder: URL, _ file: MeetingFile) -> Bool {
         FileManager.default.fileExists(atPath: folder.appending(path: file.rawValue).path)
     }

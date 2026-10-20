@@ -40,7 +40,7 @@ open /Applications/Minutes.app
 | 🎧 **Two clean tracks** | Your microphone (**Yo**) and the other participants (**Ellos**) are recorded separately with a Core Audio process tap, so the transcript knows who said what. |
 | 🖥️ **Sharp video** | The meeting window (including what others share) or the whole screen (including what you present), native resolution up to 2560 px, hardware HEVC, about 0.5 GB per hour. |
 | 📋 **Agent-ready** | Markdown and JSON transcripts with timestamps that line up with the video. One click to copy the text or the file path when the call ends. |
-| 🧹 **Clean transcripts** | Silence is skipped, Whisper's invented phrases are filtered out, and your speakers' echo is removed from your lines. |
+| 🧹 **Clean transcripts** | Silence is skipped, Whisper's invented phrases are filtered out, and your speakers' echo is removed from your lines. Names you add to the **Vocabulary** come out spelled right. |
 | 🔒 **Local and private** | Recordings and transcripts never leave your Mac; only audio chunks go to Groq to be transcribed. No account, no telemetry. |
 | 🪶 **Featherweight** | A 3 MB SwiftUI app. Capture and encoding run on macOS' own frameworks and media engine. |
 | 🌍 **Bilingual** | Spanish and English UI. Transcribe in your language or let Whisper detect it. |

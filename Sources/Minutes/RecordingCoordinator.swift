@@ -246,6 +246,7 @@ final class RecordingCoordinator: ObservableObject {
             root: AppSettings().meetingsRoot,
             apiKeyProvider: { KeychainStore.read(account: KeychainStore.groqAPIKeyAccount) },
             languageProvider: { AppSettings().transcriptionLanguage },
+            vocabularyProvider: { AppSettings().transcriptionVocabulary },
             onStatus: { [weak self] status in
                 Task { @MainActor in self?.transcription = status }
             },

@@ -9,6 +9,7 @@ struct StatusView: View {
     @AppStorage(SettingsKey.videoSource) private var videoSource: VideoSource = .window
     @AppStorage(SettingsKey.videoRetentionDays) private var videoRetentionDays = 30
     @AppStorage(SettingsKey.transcriptionLanguage) private var transcriptionLanguage = TranscriptionLanguage.systemDefault
+    @AppStorage(SettingsKey.transcriptionVocabulary) private var transcriptionVocabulary = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -38,6 +39,19 @@ struct StatusView: View {
                         }
                     }
                     .fixedSize()
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Outside a Form macOS hides a TextField's own label, so it is shown like the pickers'.
+                        HStack {
+                            Text("Vocabulario")
+                            TextField("Vocabulario", text: $transcriptionVocabulary, prompt: Text("p. ej. Groq, Whisper, Ane Etxeberria"))
+                                .labelsHidden()
+                        }
+                        Text("Nombres y términos bien escritos, separados por comas. Minutes corrige en la transcripción las palabras que suenan igual.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            // Without it the wrapped text keeps resizing the window until AppKit aborts.
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Picker("Conservar vídeos", selection: $videoRetentionDays) {
                         Text("7 días").tag(7)
                         Text("30 días").tag(30)

@@ -69,6 +69,8 @@
 "No se pudo iniciar la grabación: %@" = "Could not start recording: %@";
 "No se pudo iniciar ninguna pista de audio. %@" = "No audio track could be started. %@";
 "No se puede leer %@ en %@." = "Cannot read %@ in %@.";
+"Nombres y términos bien escritos, separados por comas. Minutes corrige en la transcripción las palabras que suenan igual." = "Names and terms spelled right, separated by commas. Minutes fixes the words in the transcript that sound the same.";
+"p. ej. Groq, Whisper, Ane Etxeberria" = "e.g. Groq, Whisper, Ane Etxeberria";
 "Pantalla completa" = "Full screen";
 "Permisos" = "Permissions";
 "Reintentar" = "Retry";
@@ -91,6 +93,7 @@
 "Vídeo de la ventana de la reunión y detección de reuniones en el navegador. Vuelve a abrir Minutes después de activarlo." = "Meeting window video and meeting tabs in browsers. Relaunch Minutes after enabling it.";
 "Vídeo: %@" = "Video: %@";
 "gsk_…" = "gsk_…";
+"Vocabulario" = "Vocabulary";
 "¿Has colgado?" = "Did you hang up?";
 "Última reunión" = "Last meeting";
 "Última reunión: %@" = "Last meeting: %@";

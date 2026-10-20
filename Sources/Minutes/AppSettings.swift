@@ -8,6 +8,7 @@ enum SettingsKey {
     static let videoRetentionDays = "videoRetentionDays"
     static let videoSource = "videoSource"
     static let transcriptionLanguage = "transcriptionLanguage"
+    static let transcriptionVocabulary = "transcriptionVocabulary"
     static let didRequestSystemAudio = "didRequestSystemAudio"
 }
 
@@ -60,6 +61,9 @@ struct AppSettings {
         let code = defaults.string(forKey: SettingsKey.transcriptionLanguage) ?? TranscriptionLanguage.automatic
         return code == TranscriptionLanguage.automatic ? nil : code
     }
+
+    /// Names and terms whose spelling corrects the transcript, separated by commas or lines.
+    var transcriptionVocabulary: String { defaults.string(forKey: SettingsKey.transcriptionVocabulary) ?? "" }
 
     /// nil keeps videos forever (stored as 0).
     var videoRetentionDays: Int? {

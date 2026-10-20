@@ -47,6 +47,7 @@ actor TranscriptionPipeline {
     private let root: URL
     private let apiKeyProvider: @Sendable () -> String?
     private let languageProvider: @Sendable () -> String?
+    private let vocabularyProvider: @Sendable () -> String
     private let makeClient: @Sendable (String) -> GroqClient
     private let exportFinalAudio: @Sendable (URL, URL) throws -> Void
     private let onStatus: @Sendable (Status) -> Void
@@ -57,12 +58,14 @@ actor TranscriptionPipeline {
     private let logger = Logger(subsystem: "io.github.xabilarra.Minutes", category: "transcription")
 
     /// - Parameters:
+    ///   - vocabularyProvider: the user's terms (see `TranscriptVocabulary`), read once per meeting.
     ///   - makeClient: builds the Groq client for an API key (tests inject a fake transport).
     ///   - exportFinalAudio: converts a CAF track to its final m4a (tests inject failures).
     init(
         root: URL,
         apiKeyProvider: @escaping @Sendable () -> String?,
         languageProvider: @escaping @Sendable () -> String? = { nil },
+        vocabularyProvider: @escaping @Sendable () -> String = { "" },
         makeClient: @escaping @Sendable (String) -> GroqClient = { GroqClient(apiKey: $0, tokenizer: TranscriptionPipeline.tokenizer) },
         exportFinalAudio: @escaping @Sendable (URL, URL) throws -> Void = { try AudioFileTools.exportM4A(from: $0, to: $1) },
         onStatus: @escaping @Sendable (Status) -> Void,
@@ -71,6 +74,7 @@ actor TranscriptionPipeline {
         self.root = root
         self.apiKeyProvider = apiKeyProvider
         self.languageProvider = languageProvider
+        self.vocabularyProvider = vocabularyProvider
         self.makeClient = makeClient
         self.exportFinalAudio = exportFinalAudio
         self.onStatus = onStatus
@@ -128,6 +132,7 @@ actor TranscriptionPipeline {
         // nil lets Whisper detect the language; read once so a meeting uses one language throughout.
         let language = languageProvider()
         let storedLanguage = language ?? TranscriptionLanguage.automatic
+        let vocabulary = TranscriptVocabulary(vocabularyProvider())
         metadata.transcription = TranscriptionStatus(
             state: .transcribing, model: GroqClient.defaultModel, language: storedLanguage)
         try? MetadataStore.write(metadata, to: folder)
@@ -148,7 +153,7 @@ actor TranscriptionPipeline {
             let them = try await transcribeTrack(
                 Self.audioSource(.systemRaw, .systemAudio, in: folder), speaker: .them, language: language, client: client,
                 workDirectory: workDirectory, cache: cache)
-            let segments = TranscriptAssembler.assemble(me: me, them: them)
+            let segments = vocabulary.correct(TranscriptAssembler.assemble(me: me, them: them))
 
             // Raw tracks are deleted last: any failure before this point leaves everything retryable.
             try exportVerifiedAudio(in: folder)
