@@ -19,14 +19,17 @@ public struct TranscriptVocabulary: Sendable {
         var keys: Set<String> = []
         for entry in text.split(whereSeparator: { $0 == "," || $0 == ";" || $0.isNewline }) {
             let term = entry.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-            let key = Self.soundKey(term)
+            let key = Self.termKey(term).key
             guard !key.isEmpty, keys.insert(key).inserted else { continue }
             terms.append(term)
         }
         self.terms = terms
         // Longer terms first, so "Aitor García" wins over "Aitor".
         entries = terms
-            .map { (term: $0, wordCount: $0.split(separator: " ").count, key: Self.soundKey($0)) }
+            .map { term in
+                let (wordCount, key) = Self.termKey(term)
+                return (term: term, wordCount: wordCount, key: key)
+            }
             .sorted { $0.wordCount > $1.wordCount }
     }
 
@@ -38,8 +41,9 @@ public struct TranscriptVocabulary: Sendable {
         }
     }
 
-    /// Replaces each run of words that sounds like a term (words separated only by spaces) with the
-    /// term as the user wrote it, leaving punctuation and every other character untouched.
+    /// Replaces each run of words that sounds like a term (words separated only by spaces, hyphens or
+    /// apostrophes) with the term as the user wrote it, leaving punctuation and every other character
+    /// untouched.
     public func correct(_ text: String) -> String {
         guard !entries.isEmpty else { return text }
         let words = Self.wordRanges(in: text)
@@ -65,14 +69,23 @@ public struct TranscriptVocabulary: Sendable {
     private func match(at index: Int, words: [Range<String.Index>], in text: String) -> (String, Int)? {
         for entry in entries where index + entry.wordCount <= words.count {
             let window = words[index..<(index + entry.wordCount)]
-            let separatedBySpaces = zip(window, window.dropFirst()).allSatisfy { previous, next in
-                text[previous.upperBound..<next.lowerBound].allSatisfy(\.isWhitespace)
+            let joinedWithinAName = zip(window, window.dropFirst()).allSatisfy { previous, next in
+                text[previous.upperBound..<next.lowerBound].allSatisfy { $0.isWhitespace || Self.nameJoiners.contains($0) }
             }
-            guard separatedBySpaces else { continue }
+            guard joinedWithinAName else { continue }
             let key = Self.soundKey(window.map { String(text[$0]) }.joined(separator: " "))
             if Self.sounds(key, like: entry.key) { return (entry.term, entry.wordCount) }
         }
         return nil
+    }
+
+    /// Characters that join the words of one name ("García-López", "O'Neill") rather than end a phrase.
+    private static let nameJoiners: Set<Character> = ["-", "'", "\u{2019}"]
+
+    /// A term's words counted and keyed the way the text's words are, so "García-López" is two words.
+    private static func termKey(_ term: String) -> (wordCount: Int, key: String) {
+        let words = wordRanges(in: term).map { String(term[$0]) }
+        return (words.count, soundKey(words.joined(separator: " ")))
     }
 
     private static func sounds(_ key: String, like termKey: String) -> Bool {

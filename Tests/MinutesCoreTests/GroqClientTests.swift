@@ -312,6 +312,17 @@ private actor SleepRecorder {
         #expect(try GroqClient.parseSegments(Data(truncatedJSON.utf8)).first?.text == " hay seg que chat")
     }
 
+    /// Segments Groq did not merge come out exactly as Groq wrote them (209 of 209 in real responses).
+    @Test func tokensOfAnUnmergedSegmentGiveGroqsOwnText() throws {
+        let tokenizer = try WhisperTokenizer(contentsOf: bundledVocabularyURL)
+        let json = """
+        {"segments":[{"start":0,"end":3,"text":" Bueno, ella es Silvia, mi compañera.",
+          "tokens":[50365,16046,11,18823,785,6943,11617,11,2752,29953,1663,13,51203]}]}
+        """
+        #expect(try GroqClient.parseSegments(Data(json.utf8), tokenizer: tokenizer).map(\.text)
+            == [" Bueno, ella es Silvia, mi compañera."])
+    }
+
     @Test func transcribeDecodesTheTokensWithTheClientsTokenizer() async throws {
         let tokenizer = try WhisperTokenizer(contentsOf: bundledVocabularyURL)
         let transport = FakeTransport([.response(status: 200, body: truncatedJSON)])

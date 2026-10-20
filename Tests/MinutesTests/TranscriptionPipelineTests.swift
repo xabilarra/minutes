@@ -243,7 +243,9 @@ import Testing
     }
 
     /// The vocabulary corrects the written transcript; Whisper never receives it as a prompt.
-    @Test func theVocabularyCorrectsTheTranscriptWithoutPromptingWhisper() async throws {
+    /// The fake transport always answers " hola".
+    @Test(arguments: [("", "hola"), ("Hola, Mobilia", "Hola")])
+    func theVocabularyCorrectsTheTranscriptWithoutPromptingWhisper(vocabulary: String, written: String) async throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "MinutesPipelineTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -261,7 +263,7 @@ import Testing
         let pipeline = TranscriptionPipeline(
             root: root,
             apiKeyProvider: { "gsk_test" },
-            vocabularyProvider: { "Hola, Mobilia" },
+            vocabularyProvider: { vocabulary },
             makeClient: { GroqClient(apiKey: $0, transport: transport, sleeper: { _ in }) },
             onStatus: { _ in },
             onFinished: { _, failure in continuation.yield(failure != nil) })
@@ -273,10 +275,10 @@ import Testing
         #expect(!body.contains("name=\"prompt\""))
         let markdown = try String(
             contentsOf: folder.appending(path: MeetingFile.transcriptMarkdown.rawValue), encoding: .utf8)
-        #expect(markdown.contains("Yo: Hola"))
+        #expect(markdown.contains("Yo: \(written)\n"))
         let json = try String(
             contentsOf: folder.appending(path: MeetingFile.transcriptJSON.rawValue), encoding: .utf8)
-        #expect(json.contains("\"Hola\""))
+        #expect(json.contains("\"\(written)\""))
     }
 
     private func exists(_ folder: URL, _ file: MeetingFile) -> Bool {

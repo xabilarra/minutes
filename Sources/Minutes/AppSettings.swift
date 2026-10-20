@@ -62,7 +62,7 @@ struct AppSettings {
         return code == TranscriptionLanguage.automatic ? nil : code
     }
 
-    /// Names and terms whose spelling corrects the transcript, separated by commas or lines.
+    /// Names and terms whose spelling corrects the transcript, separated by commas, semicolons or lines.
     var transcriptionVocabulary: String { defaults.string(forKey: SettingsKey.transcriptionVocabulary) ?? "" }
 
     /// nil keeps videos forever (stored as 0).

@@ -47,6 +47,13 @@ import MinutesCore
         #expect(vocabulary.correct("aitor, garcia") == "aitor, garcia")
     }
 
+    @Test func termsWithAHyphenOrApostropheMatchWithOrWithoutIt() {
+        let vocabulary = TranscriptVocabulary("García-López, O'Neill")
+        #expect(vocabulary.correct("con garcia-lopez y garcía lópez") == "con García-López y García-López")
+        #expect(vocabulary.correct("habla o'neil hoy") == "habla O'Neill hoy")
+        #expect(vocabulary.terms == ["García-López", "O'Neill"])
+    }
+
     @Test func correctsEverySegmentAndKeepsTheRestOfIt() {
         let vocabulary = TranscriptVocabulary("Mobilia")
         let segments = [
