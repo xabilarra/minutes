@@ -60,23 +60,27 @@ public struct GroqClient: Sendable {
     private let transport: any HTTPTransport
     private let endpoint: URL
     private let maxAttempts: Int
+    private let tokenizer: WhisperTokenizer?
     private let sleeper: @Sendable (Double) async throws -> Void
 
     /// - Parameters:
     ///   - apiKey: Groq API key; surrounding whitespace is ignored.
     ///   - maxAttempts: total attempts per file, including the first (values below 1 mean 1).
+    ///   - tokenizer: rebuilds each segment's text from its tokens (see `parseSegments`); nil keeps Groq's text.
     ///   - sleeper: waits the given number of seconds between attempts (injected in tests).
     public init(
         apiKey: String,
         transport: any HTTPTransport = URLSessionTransport(),
         endpoint: URL = GroqClient.defaultEndpoint,
         maxAttempts: Int = 4,
+        tokenizer: WhisperTokenizer? = nil,
         sleeper: @escaping @Sendable (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
     ) {
         self.apiKey = apiKey
         self.transport = transport
         self.endpoint = endpoint
         self.maxAttempts = maxAttempts
+        self.tokenizer = tokenizer
         self.sleeper = sleeper
     }
 
@@ -124,7 +128,7 @@ public struct GroqClient: Sendable {
             let (data, response) = reply
             switch response.statusCode {
             case 200..<300:
-                return try Self.parseSegments(data)
+                return try Self.parseSegments(data, tokenizer: tokenizer)
             case 429 where rateLimitWaits < Self.maximumRateLimitWaits:
                 rateLimitWaits += 1
                 attempt -= 1
@@ -166,9 +170,11 @@ public struct GroqClient: Sendable {
     }
 
     /// Parses verbose_json "segments" (start, end, text, avg_logprob, no_speech_prob, compression_ratio). A response with only "text" and no "segments" → one segment [0, 0] with that text if non-empty.
+    /// With a tokenizer, a segment's text is decoded from its "tokens" (Groq's text truncates accented words
+    /// on merged segments); Groq's text stays when there are no tokens or they do not decode.
     ///
     /// Anything that is not a JSON object with "segments" or "text" throws `.invalidResponse`.
-    public static func parseSegments(_ data: Data) throws -> [RawSegment] {
+    public static func parseSegments(_ data: Data, tokenizer: WhisperTokenizer? = nil) throws -> [RawSegment] {
         guard let response = try? JSONDecoder().decode(VerboseTranscription.self, from: data) else {
             throw GroqError.invalidResponse
         }
@@ -177,7 +183,7 @@ public struct GroqClient: Sendable {
                 RawSegment(
                     start: segment.start,
                     end: segment.end,
-                    text: segment.text,
+                    text: segment.tokens.flatMap { tokenizer?.text(of: $0) } ?? segment.text,
                     avgLogprob: segment.avgLogprob,
                     noSpeechProb: segment.noSpeechProb,
                     compressionRatio: segment.compressionRatio
@@ -253,12 +259,13 @@ public struct GroqClient: Sendable {
             let start: Double
             let end: Double
             let text: String
+            let tokens: [Int]?
             let avgLogprob: Double?
             let noSpeechProb: Double?
             let compressionRatio: Double?
 
             enum CodingKeys: String, CodingKey {
-                case start, end, text
+                case start, end, text, tokens
                 case avgLogprob = "avg_logprob"
                 case noSpeechProb = "no_speech_prob"
                 case compressionRatio = "compression_ratio"

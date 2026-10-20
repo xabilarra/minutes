@@ -290,4 +290,33 @@ private actor SleepRecorder {
         #expect(throws: GroqError.invalidResponse) { try GroqClient.parseSegments(Data("<html>".utf8)) }
         #expect(throws: GroqError.invalidResponse) { try GroqClient.parseSegments(Data("{}".utf8)) }
     }
+
+    /// Groq merges several Whisper segments into one and its "text" then loses every word from the
+    /// first accented letter on ("según" → "seg"), while "tokens" still holds what Whisper said.
+    private let truncatedJSON = """
+    {"text":" hay seg que chat","segments":[
+      {"start":143.8,"end":158.5,"text":" hay seg que chat","tokens":[50639,4842,36570,631,5081,50740],"avg_logprob":-0.13},
+      {"start":158.5,"end":160,"text":" Vale.","tokens":[631,127]},
+      {"start":160,"end":161,"text":" Sí."}
+    ]}
+    """
+
+    @Test func parseSegmentsRebuildsTheTextFromTheTokensAndFallsBackToGroqText() throws {
+        let tokenizer = try WhisperTokenizer(contentsOf: bundledVocabularyURL)
+        #expect(try GroqClient.parseSegments(Data(truncatedJSON.utf8), tokenizer: tokenizer) == [
+            RawSegment(start: 143.8, end: 158.5, text: " hay según que chat", avgLogprob: -0.13),
+            RawSegment(start: 158.5, end: 160, text: " Vale."),
+            RawSegment(start: 160, end: 161, text: " Sí."),
+        ])
+        // Without a tokenizer Groq's text is kept as it came.
+        #expect(try GroqClient.parseSegments(Data(truncatedJSON.utf8)).first?.text == " hay seg que chat")
+    }
+
+    @Test func transcribeDecodesTheTokensWithTheClientsTokenizer() async throws {
+        let tokenizer = try WhisperTokenizer(contentsOf: bundledVocabularyURL)
+        let transport = FakeTransport([.response(status: 200, body: truncatedJSON)])
+        let groq = GroqClient(apiKey: "gsk_test", transport: transport, tokenizer: tokenizer)
+        let segments = try await withAudioFile { try await groq.transcribe(fileURL: $0) }
+        #expect(segments.map(\.text) == [" hay según que chat", " Vale.", " Sí."])
+    }
 }

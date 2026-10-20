@@ -42,7 +42,7 @@ open /Applications/Minutes.app
 | 📋 **Agent-ready** | Markdown and JSON transcripts with timestamps that line up with the video. One click to copy the text or the file path when the call ends. |
 | 🧹 **Clean transcripts** | Silence is skipped, Whisper's invented phrases are filtered out, and your speakers' echo is removed from your lines. |
 | 🔒 **Local and private** | Recordings and transcripts never leave your Mac; only audio chunks go to Groq to be transcribed. No account, no telemetry. |
-| 🪶 **Featherweight** | A 2 MB SwiftUI app. Capture and encoding run on macOS' own frameworks and media engine. |
+| 🪶 **Featherweight** | A 3 MB SwiftUI app. Capture and encoding run on macOS' own frameworks and media engine. |
 | 🌍 **Bilingual** | Spanish and English UI. Transcribe in your language or let Whisper detect it. |
 
 ## 🟣 The floating pill

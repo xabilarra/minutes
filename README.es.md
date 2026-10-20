@@ -42,7 +42,7 @@ open /Applications/Minutes.app
 | 📋 **Listo para tu agente** | Transcripciones en Markdown y JSON con marcas de tiempo alineadas con el vídeo. Al colgar, un clic para copiar el texto o la ruta del archivo. |
 | 🧹 **Transcripciones limpias** | Se saltan los silencios, se filtran las frases que Whisper se inventa y se quita de tus líneas el eco de tus altavoces. |
 | 🔒 **Local y privado** | Las grabaciones y transcripciones nunca salen de tu Mac; solo los trozos de audio van a Groq para transcribirse. Sin cuenta ni telemetría. |
-| 🪶 **Ligerísimo** | Una app SwiftUI de 2 MB. La captura y la compresión usan los frameworks de macOS y el chip multimedia. |
+| 🪶 **Ligerísimo** | Una app SwiftUI de 3 MB. La captura y la compresión usan los frameworks de macOS y el chip multimedia. |
 | 🌍 **Bilingüe** | Interfaz en español e inglés. Transcribe en tu idioma o deja que Whisper lo detecte. |
 
 ## 🟣 La pastilla flotante

@@ -31,6 +31,19 @@ actor TranscriptionPipeline {
 
     static let chunkConcurrency = 3
 
+    /// Whisper's vocabulary, copied into the app by scripts/build-app.sh. Without it Groq's text is kept,
+    /// which truncates accented words on the segments Groq merges.
+    static let tokenizer: WhisperTokenizer? = {
+        guard let url = Bundle.main.url(forResource: "whisper-multilingual", withExtension: "tiktoken"),
+              let tokenizer = try? WhisperTokenizer(contentsOf: url)
+        else {
+            Logger(subsystem: "io.github.xabilarra.Minutes", category: "transcription")
+                .error("Whisper vocabulary missing; keeping Groq's segment text")
+            return nil
+        }
+        return tokenizer
+    }()
+
     private let root: URL
     private let apiKeyProvider: @Sendable () -> String?
     private let languageProvider: @Sendable () -> String?
@@ -50,7 +63,7 @@ actor TranscriptionPipeline {
         root: URL,
         apiKeyProvider: @escaping @Sendable () -> String?,
         languageProvider: @escaping @Sendable () -> String? = { nil },
-        makeClient: @escaping @Sendable (String) -> GroqClient = { GroqClient(apiKey: $0) },
+        makeClient: @escaping @Sendable (String) -> GroqClient = { GroqClient(apiKey: $0, tokenizer: TranscriptionPipeline.tokenizer) },
         exportFinalAudio: @escaping @Sendable (URL, URL) throws -> Void = { try AudioFileTools.exportM4A(from: $0, to: $1) },
         onStatus: @escaping @Sendable (Status) -> Void,
         onFinished: @escaping @Sendable (URL, String?) -> Void
