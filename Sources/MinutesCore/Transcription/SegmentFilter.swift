@@ -25,7 +25,7 @@ public enum SegmentFilter {
     /// Any segment mentioning Amara.org is a subtitle credit.
     static let hallucinationMarker = "amaraorg"
 
-    /// Drops: blank text; segments with noSpeechProb > 0.6 AND avgLogprob < -1.0 (Whisper no-speech heuristic); compressionRatio > 2.4; segments whose normalized text (lowercased, diacritics and punctuation removed, whitespace collapsed) is a known Whisper hallucination: "subtitulos realizados por la comunidad de amaraorg", "subtitulos por la comunidad de amaraorg", "gracias por ver el video", "gracias por ver", "por ver el video", "suscribete", "suscribete al canal", "musica", "thank you for watching", "thanks for watching", "amaraorg" (and normalized contains "amaraorg" anywhere). Trims surrounding whitespace of kept text.
+    /// Drops: blank text; segments with noSpeechProb > 0.6 AND avgLogprob < -1.0 (Whisper no-speech heuristic); compressionRatio > 2.4; segments whose normalized text (lowercased, diacritics and punctuation removed, whitespace collapsed) is a known Whisper hallucination: "subtitulos realizados por la comunidad de amaraorg", "subtitulos por la comunidad de amaraorg", "gracias por ver el video", "gracias por ver", "por ver el video", "suscribete", "suscribete al canal", "musica", "thank you for watching", "thanks for watching", "amaraorg" (and normalized contains "amaraorg" anywhere); segments whose normalized words are all "o" ("o", "o o o"). Trims surrounding whitespace of kept text.
     ///
     /// Text that normalizes to nothing (only punctuation or symbols, e.g. "...") counts as blank.
     public static func clean(_ segments: [RawSegment]) -> [RawSegment] {
@@ -69,7 +69,10 @@ public enum SegmentFilter {
         (segment.compressionRatio ?? 0) > compressionRatioLimit
     }
 
+    /// A segment of nothing but "o" ("o", "o o o") is Whisper guessing at background noise, never speech.
     private static func isHallucination(_ normalized: String) -> Bool {
-        hallucinations.contains(normalized) || normalized.contains(hallucinationMarker)
+        hallucinations.contains(normalized)
+            || normalized.contains(hallucinationMarker)
+            || normalized.split(separator: " ").allSatisfy { $0 == "o" }
     }
 }

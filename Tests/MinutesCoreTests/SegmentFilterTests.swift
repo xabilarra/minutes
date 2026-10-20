@@ -39,6 +39,17 @@ import MinutesCore
         #expect(texts(cleaned) == ["normal"])
     }
 
+    @Test func dropsSegmentsMadeOnlyOfTheLetterO() {
+        let cleaned = SegmentFilter.clean([
+            RawSegment(start: 0, end: 1, text: "o"),
+            RawSegment(start: 1, end: 2, text: "o o o"),
+            RawSegment(start: 2, end: 3, text: "¡O!"),
+            RawSegment(start: 3, end: 4, text: "o sea"),
+            RawSegment(start: 4, end: 5, text: "¿Y?"),
+        ])
+        #expect(texts(cleaned) == ["o sea", "¿Y?"])
+    }
+
     @Test func dropsKnownWhisperHallucinations() {
         let hallucinations = [
             "Subtítulos realizados por la comunidad de Amara.org",
