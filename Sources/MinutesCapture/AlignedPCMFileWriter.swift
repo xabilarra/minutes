@@ -167,6 +167,7 @@ final class AlignedPCMFileWriter {
     func append(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
         guard !isClosed, buffer.frameLength > 0 else { return }
         do {
+            let buffer = Self.mixedToMonoIfUnlabeled(buffer)
             let converter = try converter(for: buffer.format)
             let startSeconds = HostTime.seconds(from: referenceHostTime, to: hostTime)
             var expectedFrame = AVAudioFramePosition((startSeconds * Self.sampleRate).rounded())
@@ -207,6 +208,32 @@ final class AlignedPCMFileWriter {
     }
 
     // MARK: - Private
+
+    /// AVAudioConverter only downmixes channels it can name: unlabeled ones (the MacBook's
+    /// 3-microphone array while a call uses it) come out as pure silence, so they are averaged
+    /// here instead. Labeled layouts such as stereo keep going through the converter.
+    private static func mixedToMonoIfUnlabeled(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let format = buffer.format
+        guard format.channelCount > 1, !format.isInterleaved, format.commonFormat == .pcmFormatFloat32,
+              let channels = buffer.floatChannelData else { return buffer }
+        let tag = format.channelLayout?.layoutTag
+        let unlabeled = tag.map {
+            $0 & 0xFFFF_0000 == kAudioChannelLayoutTag_DiscreteInOrder || $0 == kAudioChannelLayoutTag_UseChannelDescriptions
+        } ?? (format.channelCount > 2)
+        guard unlabeled,
+              let monoFormat = AVAudioFormat(
+                  commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate, channels: 1, interleaved: false),
+              let mono = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: buffer.frameLength),
+              let output = mono.floatChannelData?[0] else { return buffer }
+        mono.frameLength = buffer.frameLength
+        let count = Int(format.channelCount)
+        for frame in 0..<Int(buffer.frameLength) {
+            var sum: Float = 0
+            for channel in 0..<count { sum += channels[channel][frame] }
+            output[frame] = sum / Float(count)
+        }
+        return mono
+    }
 
     private func converter(for inputFormat: AVAudioFormat) throws -> AVAudioConverter {
         if let converter, converter.inputFormat == inputFormat {
