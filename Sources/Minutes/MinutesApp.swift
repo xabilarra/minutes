@@ -129,7 +129,7 @@ private struct MenuContent: View {
     @AppStorage(SettingsKey.autoRecord) private var autoRecord = true
     @AppStorage(SettingsKey.recordVideo) private var recordVideo = true
     @AppStorage(SettingsKey.videoRetentionDays) private var videoRetentionDays = 30
-    @AppStorage(SettingsKey.videoSource) private var videoSource: VideoSource = .window
+    @AppStorage(SettingsKey.videoSource) private var videoSource: VideoSource = .focus
     @AppStorage(SettingsKey.transcriptionLanguage) private var transcriptionLanguage = TranscriptionLanguage.systemDefault
 
     var body: some View {
@@ -189,6 +189,7 @@ private struct MenuContent: View {
         Toggle("Grabar reuniones automáticamente", isOn: $autoRecord)
         Toggle("Grabar vídeo", isOn: $recordVideo)
         Picker("Vídeo", selection: $videoSource) {
+            Text("Ventana activa").tag(VideoSource.focus)
             Text("Ventana de la reunión").tag(VideoSource.window)
             Text("Pantalla completa").tag(VideoSource.display)
         }

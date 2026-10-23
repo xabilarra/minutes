@@ -56,6 +56,9 @@ public final class WindowVideoRecorder: @unchecked Sendable {
 
     // Owned by `sampleQueue`.
     private var windowID: UInt32 = 0
+    /// Meeting window when following the focus; nil for a fixed window or display.
+    private var anchorWindowID: UInt32?
+    private var isReturningToAnchor = false
     private var stream: SCStream?
     private var sink: StreamSink?
     private var writer: AVAssetWriter?
@@ -114,6 +117,42 @@ public final class WindowVideoRecorder: @unchecked Sendable {
         let ownApps = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
         let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
         try await begin(filter: filter, frame: display.frame, sourceWindowID: windowID ?? 0)
+    }
+
+    /// Starts recording `windowID` in a frame sized for the display that shows it, so
+    /// `follow(windowID:)` can later switch to the window the user focuses without restarting the
+    /// file; each window is scaled to fit that frame. When a followed window closes, recording
+    /// returns to `windowID`. Can only be called once.
+    public func start(followingFocusFrom windowID: UInt32) async throws {
+        try markStarted()
+        let content = try await shareableContent()
+        guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+            throw CaptureError.windowNotFound(windowID)
+        }
+        let center = CGPoint(x: window.frame.midX, y: window.frame.midY)
+        let display = content.displays.first { $0.frame.contains(center) }
+            ?? content.displays.first { $0.displayID == CGMainDisplayID() } ?? content.displays.first
+        sampleQueue.sync { anchorWindowID = windowID }
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        try await begin(filter: filter, frame: display?.frame ?? window.frame, sourceWindowID: windowID)
+    }
+
+    /// Switches a recording started with `start(followingFocusFrom:)` to `windowID`. Does nothing
+    /// for other recordings or once capture has stopped; throws `windowNotFound` when the window
+    /// is not shareable.
+    public func follow(windowID: UInt32) async throws {
+        let followedStream = sampleQueue.sync { anchorWindowID != nil && acceptingFrames ? self.stream : nil }
+        guard let stream = followedStream else { return }
+        let content = try await shareableContent()
+        guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+            throw CaptureError.windowNotFound(windowID)
+        }
+        do {
+            try await stream.updateContentFilter(SCContentFilter(desktopIndependentWindow: window))
+        } catch {
+            throw ScreenCaptureErrors.map(error)
+        }
+        sampleQueue.sync { self.windowID = windowID }
     }
 
     private func markStarted() throws {
@@ -292,7 +331,11 @@ public final class WindowVideoRecorder: @unchecked Sendable {
         else { return }
 
         if status == .stopped {
-            interrupt(with: CaptureError.windowNotFound(windowID), stoppingStream: false)
+            if let anchorWindowID, windowID != anchorWindowID {
+                returnToAnchor(anchorWindowID)
+            } else {
+                interrupt(with: CaptureError.windowNotFound(windowID), stoppingStream: false)
+            }
             return
         }
         guard status == .complete, let pixelBuffer = sampleBuffer.imageBuffer else { return }
@@ -330,6 +373,26 @@ public final class WindowVideoRecorder: @unchecked Sendable {
     /// `mach_absolute_time` at which the frame was displayed, when ScreenCaptureKit provides it.
     private static func displayHostTime(of sampleBuffer: CMSampleBuffer) -> UInt64? {
         (frameInfo(of: sampleBuffer)?[.displayTime] as? NSNumber)?.uint64Value
+    }
+
+    /// Called on `sampleQueue` when a followed window closed: records the meeting window again.
+    private func returnToAnchor(_ anchor: UInt32) {
+        guard !isReturningToAnchor else { return }
+        isReturningToAnchor = true
+        let closedWindowID = windowID
+        Task {
+            do {
+                try await self.follow(windowID: anchor)
+            } catch {
+                self.logger.error("Could not return to the meeting window: \(error.localizedDescription, privacy: .public)")
+            }
+            self.sampleQueue.async {
+                self.isReturningToAnchor = false
+                if self.windowID == closedWindowID {
+                    self.interrupt(with: CaptureError.windowNotFound(closedWindowID), stoppingStream: true)
+                }
+            }
+        }
     }
 
     /// Called on `sampleQueue` when the recording cannot continue.

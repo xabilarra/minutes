@@ -99,3 +99,5 @@
 "Última reunión: %@" = "Last meeting: %@";
 "Reiniciar Minutes" = "Restart Minutes";
 "No se pudo reiniciar Minutes: %@" = "Could not restart Minutes: %@";
+"Ventana activa" = "Active window";
+"Graba la ventana que estás mirando, empezando por la reunión: incluye lo que presentes desde otras ventanas." = "Records the window you are looking at, starting with the meeting: includes what you present from other windows.";

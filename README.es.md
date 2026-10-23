@@ -38,7 +38,7 @@ open /Applications/Minutes.app
 |---|---|
 | 🎙️ **Arranca solo** | Detecta Zoom, Teams, Slack, Webex, FaceTime, WhatsApp, Discord, y Google Meet / Teams / Zoom / Whereby / Jitsi en el navegador. Sin bots ni invitaciones: nadie entra en la llamada. |
 | 🎧 **Dos pistas limpias** | Tu micrófono (**Yo**) y los demás participantes (**Ellos**) se graban por separado con un *process tap* de Core Audio, así la transcripción sabe quién dijo qué. |
-| 🖥️ **Vídeo nítido** | La ventana de la reunión (con lo que compartan los demás) o la pantalla completa (con lo que presentes tú), a resolución nativa hasta 2560 px, HEVC por hardware, unos 0,5 GB por hora. |
+| 🖥️ **Vídeo nítido** | La ventana que estás mirando, empezando por la reunión (así se graba también lo que presentes desde otra ventana o pantalla), solo la ventana de la reunión o la pantalla completa, a resolución nativa hasta 2560 px, HEVC por hardware, unos 0,5 GB por hora. |
 | 📋 **Listo para tu agente** | Transcripciones en Markdown y JSON con marcas de tiempo alineadas con el vídeo. Al colgar, un clic para copiar el texto o la ruta del archivo. |
 | 🧹 **Transcripciones limpias** | Se saltan los silencios, se filtran las frases que Whisper se inventa y se quita de tus líneas el eco de tus altavoces. Los nombres que añadas al **Vocabulario** salen bien escritos. |
 | 🔒 **Local y privado** | Las grabaciones y transcripciones nunca salen de tu Mac; solo los trozos de audio van a Groq para transcribirse. Sin cuenta ni telemetría. |
@@ -79,7 +79,7 @@ flowchart LR
 
 ```text
 ~/Reuniones/2026-10-20 10.30 Weekly sync (Google Meet)/
-├── video.mp4            ventana de la reunión o pantalla
+├── video.mp4            ventana activa, de la reunión o pantalla
 ├── yo.m4a               tu micrófono
 ├── ellos.m4a            los demás participantes
 ├── transcripcion.md     lista para pegar en un agente

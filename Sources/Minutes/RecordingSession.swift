@@ -36,11 +36,12 @@ final class RecordingSession {
     private let microphone: MicrophoneRecorder
     private let systemAudio: SystemAudioRecorder
     private let video: WindowVideoRecorder?
+    private let focusTracker: FocusTracker?
     private let logger = Logger(subsystem: "io.github.xabilarra.Minutes", category: "session")
 
     /// - Parameters:
     ///   - window: the meeting window; its title names the meeting.
-    ///   - video: what to record as video, nil for audio only. `.window` needs `window`;
+    ///   - video: what to record as video, nil for audio only. `.focus` and `.window` need `window`;
     ///     `.display` records the display showing `window` (the main display without one).
     init(app: MeetingApp, window: WindowInfo?, video videoSource: VideoSource?, trigger: Trigger, root: URL) async throws {
         let fileManager = FileManager.default
@@ -93,6 +94,7 @@ final class RecordingSession {
         }
 
         var video: WindowVideoRecorder?
+        var focusTracker: FocusTracker?
         if let videoSource, videoSource == .display || window != nil {
             let recorder = WindowVideoRecorder(outputURL: folder.appending(path: MeetingFile.video.rawValue))
             do {
@@ -101,6 +103,11 @@ final class RecordingSession {
                     try await recorder.start(displayContainingWindowID: window?.windowID)
                 case .window:
                     if let window { try await recorder.start(windowID: window.windowID) }
+                case .focus:
+                    if let window {
+                        try await recorder.start(followingFocusFrom: window.windowID)
+                        focusTracker = FocusTracker(recorder: recorder, meetingWindowID: window.windowID)
+                    }
                 }
                 video = recorder
             } catch {
@@ -116,6 +123,7 @@ final class RecordingSession {
         self.microphone = microphone
         self.systemAudio = systemAudio
         self.video = video
+        self.focusTracker = focusTracker
         self.warnings = warnings
         metadata.hasVideo = video != nil
         self.metadata = metadata
@@ -137,6 +145,7 @@ final class RecordingSession {
     func stop() async -> MeetingMetadata {
         microphone.stop()
         systemAudio.stop()
+        focusTracker?.stop()
         var videoResult: VideoRecordingResult?
         if let video {
             do {
