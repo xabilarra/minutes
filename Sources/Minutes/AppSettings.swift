@@ -14,6 +14,9 @@ enum SettingsKey {
 
 /// What the meeting video shows.
 enum VideoSource: String {
+    /// The display the user is looking at, starting with the one showing the meeting: closing or
+    /// reopening the meeting window does not stop it.
+    case activeDisplay
     /// The window the user is looking at, starting with the meeting: includes what the user presents
     /// from other windows and what others share.
     case focus
@@ -47,7 +50,7 @@ struct AppSettings {
             SettingsKey.autoRecord: true,
             SettingsKey.recordVideo: true,
             SettingsKey.videoRetentionDays: 30,
-            SettingsKey.videoSource: VideoSource.focus.rawValue,
+            SettingsKey.videoSource: VideoSource.activeDisplay.rawValue,
             SettingsKey.transcriptionLanguage: TranscriptionLanguage.systemDefault,
         ])
     }
@@ -56,7 +59,7 @@ struct AppSettings {
     var recordVideo: Bool { defaults.bool(forKey: SettingsKey.recordVideo) }
 
     var videoSource: VideoSource {
-        VideoSource(rawValue: defaults.string(forKey: SettingsKey.videoSource) ?? "") ?? .focus
+        VideoSource(rawValue: defaults.string(forKey: SettingsKey.videoSource) ?? "") ?? .activeDisplay
     }
 
     /// ISO 639-1 code sent to Whisper, or nil to let it detect the language.

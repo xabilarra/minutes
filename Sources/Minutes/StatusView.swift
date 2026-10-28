@@ -6,7 +6,7 @@ struct StatusView: View {
     @ObservedObject var coordinator: RecordingCoordinator
     @AppStorage(SettingsKey.autoRecord) private var autoRecord = true
     @AppStorage(SettingsKey.recordVideo) private var recordVideo = true
-    @AppStorage(SettingsKey.videoSource) private var videoSource: VideoSource = .focus
+    @AppStorage(SettingsKey.videoSource) private var videoSource: VideoSource = .activeDisplay
     @AppStorage(SettingsKey.videoRetentionDays) private var videoRetentionDays = 30
     @AppStorage(SettingsKey.transcriptionLanguage) private var transcriptionLanguage = TranscriptionLanguage.systemDefault
     @AppStorage(SettingsKey.transcriptionVocabulary) private var transcriptionVocabulary = ""
@@ -22,6 +22,7 @@ struct StatusView: View {
                     Toggle("Grabar reuniones automáticamente", isOn: $autoRecord)
                     Toggle("Grabar vídeo", isOn: $recordVideo)
                     Picker("Vídeo", selection: $videoSource) {
+                        Text("Pantalla activa").tag(VideoSource.activeDisplay)
                         Text("Ventana activa").tag(VideoSource.focus)
                         Text("Ventana de la reunión").tag(VideoSource.window)
                         Text("Pantalla completa").tag(VideoSource.display)
@@ -148,6 +149,7 @@ struct StatusView: View {
 
     private var videoSourceDescription: LocalizedStringKey {
         switch videoSource {
+        case .activeDisplay: "Graba la pantalla que estás mirando, empezando por la de la reunión: sigue grabando aunque cierres o vuelvas a abrir la reunión."
         case .focus: "Graba la ventana que estás mirando, empezando por la reunión: incluye lo que presentes desde otras ventanas."
         case .window: "Graba solo la ventana de la reunión, incluido lo que compartan los demás."
         case .display: "Graba toda la pantalla donde está la reunión, incluido lo que presentes tú."

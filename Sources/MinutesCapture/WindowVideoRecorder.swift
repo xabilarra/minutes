@@ -59,6 +59,9 @@ public final class WindowVideoRecorder: @unchecked Sendable {
     /// Meeting window when following the focus; nil for a fixed window or display.
     private var anchorWindowID: UInt32?
     private var isReturningToAnchor = false
+    /// True when following the display the user is looking at.
+    private var followsDisplay = false
+    private var recordedDisplayID: UInt32?
     private var stream: SCStream?
     private var sink: StreamSink?
     private var writer: AVAssetWriter?
@@ -114,9 +117,43 @@ public final class WindowVideoRecorder: @unchecked Sendable {
         guard let display else {
             throw CaptureError.unsupported("no display is available to record")
         }
+        sampleQueue.sync { recordedDisplayID = display.displayID }
+        try await begin(filter: Self.displayFilter(display, content: content), frame: display.frame, sourceWindowID: windowID ?? 0)
+    }
+
+    /// Display a display recording started on; nil for window recordings.
+    public var displayID: UInt32? {
+        sampleQueue.sync { recordedDisplayID }
+    }
+
+    /// Like `start(displayContainingWindowID:)`, but `follow(displayID:)` can later switch to the
+    /// display the user is looking at without restarting the file; each display is scaled to fit
+    /// the first one's frame. Closing windows never stops it. Can only be called once.
+    public func start(followingDisplayFrom windowID: UInt32?) async throws {
+        sampleQueue.sync { followsDisplay = true }
+        try await start(displayContainingWindowID: windowID)
+    }
+
+    /// Switches a recording started with `start(followingDisplayFrom:)` to `displayID`. Does nothing
+    /// for other recordings or once capture has stopped; throws when the display is not available.
+    public func follow(displayID: UInt32) async throws {
+        let followedStream = sampleQueue.sync { followsDisplay && acceptingFrames ? self.stream : nil }
+        guard let stream = followedStream else { return }
+        let content = try await shareableContent()
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError.unsupported("display \(displayID) is not available to record")
+        }
+        do {
+            try await stream.updateContentFilter(Self.displayFilter(display, content: content))
+        } catch {
+            throw ScreenCaptureErrors.map(error)
+        }
+    }
+
+    /// The whole display, leaving out this app's own windows such as the recording indicator.
+    private static func displayFilter(_ display: SCDisplay, content: SCShareableContent) -> SCContentFilter {
         let ownApps = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
-        let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
-        try await begin(filter: filter, frame: display.frame, sourceWindowID: windowID ?? 0)
+        return SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
     }
 
     /// Starts recording `windowID` in a frame sized for the display that shows it, so

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// A window as listed by the window server, front to back (`CGWindowListCopyWindowInfo`).
@@ -66,5 +67,27 @@ public struct FocusDebouncer: Sendable {
     public mutating func reset(to window: UInt32) {
         current = window
         pending = nil
+    }
+}
+
+/// Picks the display the user is looking at, for video that follows the focus across displays.
+public enum FocusedDisplayPicker {
+    /// Display containing the center of `windowFrame`, or the one holding most of it when the center
+    /// is on none. Frames use the window server's global coordinates. nil when `windowFrame` is nil
+    /// or on no display, so the caller keeps the current display.
+    public static func pick(windowFrame: CGRect?, displays: [(id: UInt32, frame: CGRect)]) -> UInt32? {
+        guard let windowFrame else { return nil }
+        let center = CGPoint(x: windowFrame.midX, y: windowFrame.midY)
+        if let display = displays.first(where: { $0.frame.contains(center) }) {
+            return display.id
+        }
+        func overlap(_ frame: CGRect) -> CGFloat {
+            let shared = frame.intersection(windowFrame)
+            return shared.isNull ? 0 : shared.width * shared.height
+        }
+        guard let best = displays.max(by: { overlap($0.frame) < overlap($1.frame) }), overlap(best.frame) > 0 else {
+            return nil
+        }
+        return best.id
     }
 }

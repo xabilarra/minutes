@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import MinutesCapture
 import MinutesCore
@@ -42,7 +43,7 @@ final class RecordingSession {
     /// - Parameters:
     ///   - window: the meeting window; its title names the meeting.
     ///   - video: what to record as video, nil for audio only. `.focus` and `.window` need `window`;
-    ///     `.display` records the display showing `window` (the main display without one).
+    ///     `.display` and `.activeDisplay` start on the display showing `window` (the main display without one).
     init(app: MeetingApp, window: WindowInfo?, video videoSource: VideoSource?, trigger: Trigger, root: URL) async throws {
         let fileManager = FileManager.default
         let startedAt = Date()
@@ -95,10 +96,13 @@ final class RecordingSession {
 
         var video: WindowVideoRecorder?
         var focusTracker: FocusTracker?
-        if let videoSource, videoSource == .display || window != nil {
+        if let videoSource, videoSource == .display || videoSource == .activeDisplay || window != nil {
             let recorder = WindowVideoRecorder(outputURL: folder.appending(path: MeetingFile.video.rawValue))
             do {
                 switch videoSource {
+                case .activeDisplay:
+                    try await recorder.start(followingDisplayFrom: window?.windowID)
+                    focusTracker = FocusTracker(recorder: recorder, displayID: recorder.displayID ?? CGMainDisplayID())
                 case .display:
                     try await recorder.start(displayContainingWindowID: window?.windowID)
                 case .window:
